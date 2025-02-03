@@ -1,0 +1,23 @@
+server:
+  port: "8080"
+
+database:
+  host: "localhost"
+  port: "3306"
+  user: "root"
+  password: "wyb"
+  name: "ai_cloud"
+
+jwt:
+  secret: "wyb010607"
+  expiration_hours: 24
+
+storage:
+  type: "local" # 或 oss
+  local:
+    base_dir: "./storage_data"
+  oss:
+    endpoint: "oss-cn-nanjing.aliyuncs.com"
+    bucket: "smkl-obsidian"
+    access_key_id: ""
+    access_key_secret: ""
