@@ -174,3 +174,27 @@ func (fc *FileController) CreateFolder(ctx *gin.Context) {
 	}
 	response.SuccessWithMessage(ctx, "创建成功", nil)
 }
+
+// BatchMove 批量移动文件/文件夹
+func (fc *FileController) BatchMove(ctx *gin.Context) {
+	var req model.BatchMoveRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	// 获取当前用户ID
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 执行批量移动
+	if err := fc.fileService.BatchMoveFiles(userID, req.FileIDs, req.TargetParentID); err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "移动失败")
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "移动成功", nil)
+}

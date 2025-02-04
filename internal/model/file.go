@@ -21,3 +21,8 @@ type CreateFolderReq struct {
 	Name     string  `json:"name"`
 	ParentID *string `json:"parent_id,omitempty"`
 }
+
+type BatchMoveRequest struct {
+	FileIDs        []string `json:"files_pid" binding:"required"`
+	TargetParentID string   `json:"target_pid"`
+}

@@ -23,6 +23,7 @@ type FileService interface {
 	DownloadFile(fileID string) (*model.File, []byte, error)
 	DeleteFileOrFolder(userID uint, fileID string) error
 	CreateFolder(userID uint, name string, parentID *string) error
+	BatchMoveFiles(userID uint, fileIDs []string, targetParentID string) error
 }
 
 type fileService struct {
