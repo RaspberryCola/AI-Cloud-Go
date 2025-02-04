@@ -20,6 +20,8 @@ func NewDriver(cfg config.StorageConfig) (Driver, error) {
 		return NewLocalStorage(cfg.Local.BaseDir)
 	case "oss":
 		return NewOSSStorage(cfg.OSS)
+	case "minio":
+		return NewMinioStorage(cfg.Minio)
 	default:
 		return nil, fmt.Errorf("unsupported storage type: %s", cfg.Type)
 	}

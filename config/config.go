@@ -23,10 +23,20 @@ type JWTConfig struct {
 	ExpirationHours int    `mapstructure:"expiration_hours"`
 }
 
+type MinioConfig struct {
+	Endpoint        string `mapstructure:"endpoint"`
+	Bucket          string `mapstructure:"bucket"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	AccessKeySecret string `mapstructure:"access_key_secret"`
+	UseSSL          bool   `mapstructure:"use_ssl"`
+	Region          string `mapstructure:"region"`
+}
+
 type StorageConfig struct {
-	Type  string      `mapstructure:"type"` // local/oss
+	Type  string      `mapstructure:"type"` // local/oss/minio
 	Local LocalConfig `mapstructure:"local"`
 	OSS   OSSConfig   `mapstructure:"oss"`
+	Minio MinioConfig `mapstructure:"minio"`
 }
 
 type LocalConfig struct {

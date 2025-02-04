@@ -7,13 +7,14 @@ import (
 	"ai-cloud/internal/storage"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"mime"
 	"mime/multipart"
 	"path/filepath"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type FileService interface {
@@ -37,6 +38,7 @@ func NewFileService(fileDao dao.FileDao) FileService {
 	cfg := config.AppConfigInstance.Storage
 	driver, err := storage.NewDriver(cfg)
 	if err != nil {
+		log.Printf("Failed to initialize storage driver: %v", err)
 		return nil
 	}
 	return &fileService{fileDao: fileDao, storageDriver: driver}
@@ -50,7 +52,7 @@ func (fs *fileService) UploadFile(userID uint, fileHeader *multipart.FileHeader,
 		Name:        fileHeader.Filename,
 		Size:        fileHeader.Size,
 		MIMEType:    mime.TypeByExtension(filepath.Ext(fileHeader.Filename)),
-		StorageType: "local", // TODO: Determine storage type dynamically
+		StorageType: config.AppConfigInstance.Storage.Type,
 		StorageKey:  GenerateStorageKey(userID, fileID),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
