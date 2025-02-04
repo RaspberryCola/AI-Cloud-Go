@@ -24,6 +24,7 @@ type FileService interface {
 	DeleteFileOrFolder(userID uint, fileID string) error
 	CreateFolder(userID uint, name string, parentID *string) error
 	BatchMoveFiles(userID uint, fileIDs []string, targetParentID string) error
+	SearchList(id uint, key string, page int, size int, sort string) (int64, []model.File, error)
 }
 
 type fileService struct {
@@ -82,9 +83,9 @@ func (fs *fileService) GetFileURL(key string) (string, error) {
 	return fs.storageDriver.GetURL(key)
 }
 
-func (fs *fileService) ListFiles(userID uint, parentID *string) ([]model.File, error) {
-	return fs.fileDao.GetFilesByParentID(userID, parentID)
-}
+//func (fs *fileService) ListFiles(userID uint, parentID *string) ([]model.File, error) {
+//	return fs.fileDao.GetFilesByParentID(userID, parentID)
+//}
 
 func (fs *fileService) CreateFolder(userID uint, name string, parentID *string) error {
 	var parent *model.File
@@ -195,6 +196,20 @@ func (fs *fileService) PageList(userID uint, parentID *string, page int, pageSiz
 		return 0, nil, err
 	}
 	files, err := fs.fileDao.ListFiles(userID, parentID, page, pageSize, sort)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return total, files, nil
+}
+
+func (fs *fileService) SearchList(userID uint, key string, page int, pageSize int, sort string) (int64, []model.File, error) {
+
+	total, err := fs.fileDao.CountFilesByKeyword(key, userID)
+	if err != nil {
+		return 0, nil, err
+	}
+	files, err := fs.fileDao.GetFilesByKeyword(userID, key, page, pageSize, sort)
 	if err != nil {
 		return 0, nil, err
 	}

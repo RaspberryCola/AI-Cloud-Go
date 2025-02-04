@@ -26,6 +26,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			auth.DELETE("/delete", fc.Delete)
 			auth.POST("/folder", fc.CreateFolder)
 			auth.POST("/move", fc.BatchMove)
+			auth.GET("/search", fc.Search)
 		}
 	}
 }

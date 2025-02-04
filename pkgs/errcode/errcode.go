@@ -35,8 +35,8 @@ const (
 	FileSizeExceeded = 21004 // 文件大小超限
 	FileTypeInvalid  = 21005 // 文件类型无效
 	FileParseFailed  = 21006 // 文件解析失败
-	FileListFailed   = 21007
-
+	FileListFailed   = 21007 // 文杰列表获取失败
+	FileSearchFailed = 21008 // 文件搜索失败
 	// 订单模块 (22000-22999)
 	// 可后续扩展...
 )

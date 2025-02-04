@@ -199,3 +199,32 @@ func (fc *FileController) BatchMove(ctx *gin.Context) {
 
 	response.SuccessWithMessage(ctx, "移动成功", nil)
 }
+
+func (fc *FileController) Search(ctx *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户校验失败")
+		return
+	}
+
+	key := ctx.Query("key")
+
+	page, pageSize, err := utils.ParsePaginationParams(ctx)
+	if err != nil {
+		response.ParamError(ctx, errcode.ParamValidateError, "分页参数错误")
+		return
+	}
+
+	sort := ctx.DefaultQuery("sort", "name:asc")
+	if err := utils.ValidateSortParameter(sort, []string{"name", "upadated_at"}); err != nil {
+		response.ParamError(ctx, errcode.ParamValidateError, "排序参数错误")
+	}
+
+	total, files, err := fc.fileService.SearchList(userID, key, page, pageSize, sort)
+	if err != nil {
+		response.InternalError(ctx, errcode.FileSearchFailed, "搜索文件失败")
+	}
+
+	response.PageSuccess(ctx, files, total)
+
+}

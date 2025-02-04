@@ -17,6 +17,8 @@ type FileDao interface {
 	ListFiles(userID uint, parentID *string, page int, pageSize int, sort string) ([]model.File, error)
 	CountFilesByParentID(parentID *string, userID uint) (int64, error)
 	UpdateFile(file *model.File) error
+	CountFilesByKeyword(key string, userID uint) (int64, error)
+	GetFilesByKeyword(userID uint, key string, page int, pageSize int, sort string) ([]model.File, error)
 }
 
 // fileDao 实现了FileDao接口，提供文件相关操作
@@ -63,8 +65,6 @@ func (fd *fileDao) GetFilesByParentID(userID uint, parentID *string) ([]model.Fi
 	} else {
 		query = query.Where("parent_id = ?", *parentID)
 	}
-	query = query.Order("is_dir desc")
-	query = query.Order("name asc")
 
 	if err := query.Find(&files).Error; err != nil {
 		return nil, err
@@ -148,6 +148,27 @@ func (fd *fileDao) ListFiles(userID uint, parentID *string, page int, pageSize i
 	return files, nil
 }
 
+func (fd *fileDao) GetFilesByKeyword(userID uint, key string, page int, pageSize int, sort string) ([]model.File, error) {
+	var files []model.File
+	query := fd.db.Model(&model.File{}).Where("user_id=?", userID).Where("name LIKE ?", "%"+key+"%")
+
+	query = query.Order("is_dir desc")
+	sortClauses := strings.Split(sort, ",")
+	for _, clause := range sortClauses {
+		parts := strings.Split(clause, ":")
+		filed, order := parts[0], parts[1]
+		query = query.Order(fmt.Sprintf("%s %s", filed, order))
+	}
+	//处理分页
+	offset := (page - 1) * pageSize
+	query = query.Offset(offset).Limit(pageSize)
+
+	if err := query.Find(&files).Error; err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
 // CountFilesByParentID 计算指定父ID下的文件数量
 // 参数:
 //
@@ -167,6 +188,17 @@ func (fd *fileDao) CountFilesByParentID(parentID *string, userID uint) (int64, e
 	} else {
 		query = query.Where("parent_id = ?", parentID)
 	}
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (fd *fileDao) CountFilesByKeyword(key string, userID uint) (int64, error) {
+	var total int64
+	query := fd.db.Model(&model.File{}).
+		Where("user_id = ?", userID).
+		Where("name like ?", "%"+key+"%")
 	if err := query.Count(&total).Error; err != nil {
 		return 0, err
 	}
