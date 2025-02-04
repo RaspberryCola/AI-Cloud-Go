@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"ai-cloud/internal/model"
 	"ai-cloud/internal/service"
 	"ai-cloud/internal/utils"
 	"ai-cloud/pkgs/errcode"
@@ -121,4 +122,55 @@ func (fc *FileController) Download(ctx *gin.Context) {
 	ctx.Header("Content-Type", fileMeta.MIMEType)
 	ctx.Header("Content-Length", strconv.FormatInt(fileMeta.Size, 10))
 	ctx.Data(http.StatusOK, fileMeta.MIMEType, fileData)
+}
+
+func (fc *FileController) Delete(ctx *gin.Context) {
+	fileID := ctx.Query("file_id")
+	if fileID == "" {
+		response.ParamError(ctx, errcode.ParamValidateError, "参数错误")
+		return
+	}
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户未认证")
+		return
+	}
+
+	if err := fc.fileService.DeleteFileOrFolder(userID, fileID); err != nil {
+		response.InternalError(ctx, errcode.FileDeleteFailed, "删除失败")
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "删除成功", nil)
+}
+
+func (fc *FileController) CreateFolder(ctx *gin.Context) {
+	//var req models.CreateFolderRequest
+	//if err := ctx.ShouldBind(&req); err != nil {
+	//	ctx.JSON(http.StatusBadRequest, common.Error(100, "参数错误"))
+	//	return
+	//}
+	req := model.CreateFolderReq{}
+	err := ctx.ShouldBindJSON(&req)
+	if err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	if req.ParentID != nil && *req.ParentID == "" {
+		req.ParentID = nil
+	}
+
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	err = fc.fileService.CreateFolder(userID, req.Name, req.ParentID)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "文件夹创建失败")
+		return
+	}
+	response.SuccessWithMessage(ctx, "创建成功", nil)
 }

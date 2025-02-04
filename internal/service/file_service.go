@@ -21,6 +21,8 @@ type FileService interface {
 	GetFileURL(key string) (string, error)
 	PageList(userID uint, parentID *string, page int, pageSize int, sort string) (int64, []model.File, error)
 	DownloadFile(fileID string) (*model.File, []byte, error)
+	DeleteFileOrFolder(userID uint, fileID string) error
+	CreateFolder(userID uint, name string, parentID *string) error
 }
 
 type fileService struct {
@@ -83,35 +85,31 @@ func (fs *fileService) ListFiles(userID uint, parentID *string) ([]model.File, e
 	return fs.fileDao.GetFilesByParentID(userID, parentID)
 }
 
-func (fs *fileService) CreateFolder(userID uint, name, parentID string) (*model.File, error) {
+func (fs *fileService) CreateFolder(userID uint, name string, parentID *string) error {
 	var parent *model.File
 
-	var parentIDPtr *string
-
 	// 父目录验证
-	if parentID != "" {
+	if parentID != nil {
 		var err error
-		parent, err = fs.fileDao.GetFileMetaByFileID(parentID)
+		parent, err = fs.fileDao.GetFileMetaByFileID(*parentID)
 		if err != nil || parent == nil {
-			return nil, errors.New("父目录不存在")
+			return errors.New("父目录不存在")
 		}
 		if !parent.IsDir {
-			return nil, errors.New("父路径不是目录")
+			return errors.New("父路径不是目录")
 		}
 		if parent.UserID != userID {
-			return nil, errors.New("权限不足")
+			return errors.New("权限不足")
 		}
-		parentIDPtr = &parentID
 	}
 
 	// 同名检查
-	existing, _ := fs.fileDao.GetFilesByParentID(userID, parentIDPtr)
+	existing, _ := fs.fileDao.GetFilesByParentID(userID, parentID)
 	for _, f := range existing {
 		if f.Name == name {
 			if f.IsDir {
-				return nil, errors.New("文件夹已存在")
+				return errors.New("文件夹已存在")
 			}
-			//return nil, errors.New("文件已存在")
 		}
 	}
 
@@ -121,17 +119,17 @@ func (fs *fileService) CreateFolder(userID uint, name, parentID string) (*model.
 		UserID:      userID,
 		Name:        name,
 		IsDir:       true,
-		ParentID:    parentIDPtr,
+		ParentID:    parentID,
 		StorageType: "dir", // 特殊标识
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
 	if err := fs.fileDao.CreateFile(newFolder); err != nil {
-		return nil, fmt.Errorf("failed to create folder: %w", err)
+		return fmt.Errorf("failed to create folder: %w", err)
 	}
 
-	return newFolder, nil
+	return nil
 }
 
 func (fs *fileService) DownloadFile(fileID string) (*model.File, []byte, error) {
@@ -156,7 +154,7 @@ func (fs *fileService) DownloadFile(fileID string) (*model.File, []byte, error) 
 	return fileMeta, fileData, nil
 }
 
-func (fs *fileService) DeleteFileOrFolder(userID uint, fileID string) interface{} {
+func (fs *fileService) DeleteFileOrFolder(userID uint, fileID string) error {
 	file, err := fs.fileDao.GetFileMetaByFileID(fileID)
 	if err != nil {
 		return fmt.Errorf("获取文件信息失败：%v", err)
