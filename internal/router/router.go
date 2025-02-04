@@ -28,6 +28,8 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			auth.POST("/move", fc.BatchMove)
 			auth.GET("/search", fc.Search)
 			auth.PUT("/rename", fc.Rename)
+			auth.GET("/path", fc.GetPath)
+			auth.GET("/id-path", fc.GetIDPath)
 		}
 	}
 }

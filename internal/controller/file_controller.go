@@ -54,14 +54,7 @@ func (fc *FileController) Upload(ctx *gin.Context) {
 		response.InternalError(ctx, errcode.FileUploadFailed, "上传失败")
 		return
 	}
-	//// 获取文件的url？作用是？
-	//url, err := fc.fileService.GetFileURL(newFile.StorageKey)
-	//if err != nil {
-	//	c.JSON(http.StatusInternalServerError, common.Error(100, "获取文件URL失败"))
-	//	return
-	//}
 	response.SuccessWithMessage(ctx, "文件上传成功", nil)
-
 }
 
 func (fc *FileController) PageList(ctx *gin.Context) {
@@ -249,4 +242,44 @@ func (fc *FileController) Rename(ctx *gin.Context) {
 
 	response.SuccessWithMessage(ctx, "重命名成功", nil)
 
+}
+
+// GetPath 获取文件的完整路径
+func (fc *FileController) GetPath(ctx *gin.Context) {
+	fileID := ctx.Query("file_id")
+	if fileID == "" {
+		response.ParamError(ctx, errcode.ParamValidateError, "文件ID不能为空")
+		return
+	}
+
+	// 获取文件路径
+	path, err := fc.fileService.GetFilePath(fileID)
+	if err != nil {
+		response.InternalError(ctx, errcode.FileNotFound, "获取文件路径失败")
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "获取文件路径成功", gin.H{
+		"path": path,
+	})
+}
+
+// GetIDPath 获取文件的ID路径
+func (fc *FileController) GetIDPath(ctx *gin.Context) {
+	fileID := ctx.Query("file_id")
+	if fileID == "" {
+		response.ParamError(ctx, errcode.ParamValidateError, "文件ID不能为空")
+		return
+	}
+
+	// 获取文件ID路径
+	path, err := fc.fileService.GetFileIDPath(fileID)
+	if err != nil {
+		response.InternalError(ctx, errcode.FileNotFound, "获取文件路径失败")
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "获取文件ID路径成功", gin.H{
+		"id_path": path,
+	})
 }

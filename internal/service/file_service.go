@@ -27,6 +27,8 @@ type FileService interface {
 	BatchMoveFiles(userID uint, fileIDs []string, targetParentID string) error
 	SearchList(userID uint, key string, page int, size int, sort string) (int64, []model.File, error)
 	Rename(userID uint, fileID string, newName string) error
+	GetFilePath(fileID string) (string, error)
+	GetFileIDPath(fileID string) (string, error)
 }
 
 type fileService struct {
@@ -354,4 +356,48 @@ func GenerateUUID() string {
 }
 func GenerateStorageKey(userID uint, fileID string) string {
 	return fmt.Sprintf("user%d-%s", userID, GenerateUUID())
+}
+
+// GetFilePath 通过递归查询生成文件路径
+func (fs *fileService) GetFilePath(fileID string) (string, error) {
+	file, err := fs.fileDao.GetFileMetaByFileID(fileID)
+	if err != nil {
+		return "", err
+	}
+
+	path := file.Name
+	currentParentID := file.ParentID
+
+	for currentParentID != nil {
+		parent, err := fs.fileDao.GetFileMetaByFileID(*currentParentID)
+		if err != nil {
+			return "", err
+		}
+		path = parent.Name + "/" + path
+		currentParentID = parent.ParentID
+	}
+
+	return "/root/" + path, nil
+}
+
+// GetFileIDPath 生成基于文件ID的路径
+func (fs *fileService) GetFileIDPath(fileID string) (string, error) {
+	file, err := fs.fileDao.GetFileMetaByFileID(fileID)
+	if err != nil {
+		return "", err
+	}
+
+	path := file.ID
+	currentParentID := file.ParentID
+
+	for currentParentID != nil {
+		parent, err := fs.fileDao.GetFileMetaByFileID(*currentParentID)
+		if err != nil {
+			return "", err
+		}
+		path = parent.ID + "/" + path
+		currentParentID = parent.ParentID
+	}
+
+	return "/root/" + path, nil
 }
