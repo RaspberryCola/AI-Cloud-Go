@@ -24,7 +24,8 @@ type FileService interface {
 	DeleteFileOrFolder(userID uint, fileID string) error
 	CreateFolder(userID uint, name string, parentID *string) error
 	BatchMoveFiles(userID uint, fileIDs []string, targetParentID string) error
-	SearchList(id uint, key string, page int, size int, sort string) (int64, []model.File, error)
+	SearchList(userID uint, key string, page int, size int, sort string) (int64, []model.File, error)
+	Rename(userID uint, fileID string, newName string) error
 }
 
 type fileService struct {
@@ -134,6 +135,28 @@ func (fs *fileService) CreateFolder(userID uint, name string, parentID *string) 
 	return nil
 }
 
+func (fs *fileService) Rename(userID uint, fileID string, newName string) error {
+
+	// 根据id获取file信息
+	file, err := fs.fileDao.GetFileMetaByFileID(fileID)
+	if err != nil {
+		return errors.New("请检查文件是否存在")
+	}
+	// 检查同名信息
+	existing, _ := fs.fileDao.GetFilesByParentID(userID, file.ParentID)
+	for _, f := range existing {
+		if f.Name == newName {
+			return errors.New("目标名称已占用")
+		}
+	}
+	// 更新信息
+	file.Name = newName
+	file.UpdatedAt = time.Now()
+	if err := fs.fileDao.UpdateFile(file); err != nil {
+		return errors.New("重命名失败")
+	}
+	return nil
+}
 func (fs *fileService) DownloadFile(fileID string) (*model.File, []byte, error) {
 	// 1. 验证文件权限并获取元数据
 	fileMeta, err := fs.fileDao.GetFileMetaByFileID(fileID)

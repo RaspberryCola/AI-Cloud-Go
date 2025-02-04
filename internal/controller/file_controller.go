@@ -228,3 +228,25 @@ func (fc *FileController) Search(ctx *gin.Context) {
 	response.PageSuccess(ctx, files, total)
 
 }
+
+func (fc *FileController) Rename(ctx *gin.Context) {
+	var req model.RenameRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	if err = fc.fileService.Rename(userID, req.FileID, req.NewName); err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, fmt.Sprintf("重命名失败 %s", err))
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "重命名成功", nil)
+
+}

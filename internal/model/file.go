@@ -26,3 +26,8 @@ type BatchMoveRequest struct {
 	FileIDs        []string `json:"files_pid" binding:"required"`
 	TargetParentID string   `json:"target_pid"`
 }
+
+type RenameRequest struct {
+	FileID  string `json:"file_id" binding:"required"`
+	NewName string `json:"new_name" binding:"required"`
+}
