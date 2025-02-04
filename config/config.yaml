@@ -21,3 +21,24 @@ storage:
     bucket: "smkl-obsidian"
     access_key_id: ""
     access_key_secret: ""
+
+# 新增 CORS 配置
+cors:
+  allow_origins:
+    - "*"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+  allow_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Accept"
+    - "Authorization"
+  expose_headers:
+    - "Content-Length"
+  allow_credentials: true
+  max_age: "12h" # 12 小时

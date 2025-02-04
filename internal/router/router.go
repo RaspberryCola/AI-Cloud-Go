@@ -2,6 +2,7 @@ package router
 
 import (
 	"ai-cloud/internal/controller"
+	"ai-cloud/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -9,10 +10,17 @@ import (
 func SetUpRouters(r *gin.Engine, uc *controller.UserController) {
 	api := r.Group("/api")
 	{
-		userGroup := api.Group("/users")
+
+		publicUser := api.Group("/users")
 		{
-			userGroup.POST("/register", uc.Register)
-			userGroup.POST("/login", uc.Login)
+			publicUser.POST("/register", uc.Register)
+			publicUser.POST("/login", uc.Login)
+		}
+
+		auth := api.Group("files")
+		auth.Use(middleware.JWTAuth())
+		{
+			//
 		}
 	}
 }

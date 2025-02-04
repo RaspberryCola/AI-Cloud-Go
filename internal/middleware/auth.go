@@ -15,7 +15,7 @@ const (
 	AuthBearerType = "Bearer"
 )
 
-func JWT() gin.HandlerFunc {
+func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 获取 Authorization 头
 		authHeader := c.GetHeader(AuthHeaderKey)

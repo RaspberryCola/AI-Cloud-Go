@@ -40,11 +40,20 @@ type OSSConfig struct {
 	AccessKeySecret string `mapstructure:"access_key_secret"`
 }
 
+type CORSConfig struct {
+	AllowOrigins     []string `mapstructure:"allow_origins"`
+	AllowMethods     []string `mapstructure:"allow_methods"`
+	AllowHeaders     []string `mapstructure:"allow_headers"`
+	ExposeHeaders    []string `mapstructure:"expose_headers"`
+	AllowCredentials bool     `mapstructure:"allow_credentials"`
+	MaxAge           string   `mapstructure:"max_age"` // 使用字符串表示时间，便于配置
+}
 type AppConfig struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Storage  StorageConfig  `mapstructure:"storage"`
+	CORS     CORSConfig     `mapstructure:"cors"`
 }
 
 var AppConfigInstance *AppConfig
