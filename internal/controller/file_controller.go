@@ -63,7 +63,7 @@ func (fc *FileController) Upload(ctx *gin.Context) {
 
 }
 
-func (fc *FileController) List(ctx *gin.Context) {
+func (fc *FileController) PageList(ctx *gin.Context) {
 	// 获取用户ID并验证
 	userID, err := utils.GetUserIDFromContext(ctx)
 	if err != nil {
