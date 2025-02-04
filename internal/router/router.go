@@ -2,12 +2,11 @@ package router
 
 import (
 	"ai-cloud/internal/controller"
+
 	"github.com/gin-gonic/gin"
 )
 
-func SetUserRouter(uc *controller.UserController) *gin.Engine {
-	r := gin.Default()
-	// 用户相关路由
+func SetUpRouters(r *gin.Engine, uc *controller.UserController) {
 	api := r.Group("/api")
 	{
 		userGroup := api.Group("/users")
@@ -16,5 +15,4 @@ func SetUserRouter(uc *controller.UserController) *gin.Engine {
 			userGroup.POST("/login", uc.Login)
 		}
 	}
-	return r
 }

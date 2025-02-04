@@ -8,6 +8,7 @@ import (
 	"ai-cloud/internal/router"
 	"ai-cloud/internal/service"
 	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"time"
 )
 
@@ -20,7 +21,9 @@ func main() {
 	userService := service.NewUserService(userDao)
 	userController := controller.NewUserController(userService)
 
-	r := router.SetUserRouter(userController)
+	r := gin.Default()
+	// 配置路由
+	router.SetUpRouters(r, userController)
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},                                                 // 允许所有域名
