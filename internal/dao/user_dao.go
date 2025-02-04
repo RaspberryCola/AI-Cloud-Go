@@ -7,7 +7,7 @@ import (
 )
 
 type UserDao interface {
-	CheckFieldExists(filed string, value interface{}) (bool, error)
+	CheckFieldExists(field string, value interface{}) (bool, error)
 	CreateUser(user *model.User) error
 	GetUserByName(name string) (user *model.User, err error)
 }

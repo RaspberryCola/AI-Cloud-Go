@@ -7,6 +7,7 @@ const (
 	AuthorizationError = 10002
 	TokenError         = 10003
 	TokenExpired       = 10004
+	TokenMissing       = 10005
 
 	// 用户模块错误码 (20000-29999)
 	UserNotFound      = 20001
@@ -27,6 +28,7 @@ var codeMessages = map[int]string{
 	AuthorizationError: "认证失败",
 	TokenError:         "无效的Token",
 	TokenExpired:       "Token已过期",
+	TokenMissing:       "Token缺失",
 
 	UserNotFound:      "用户不存在",
 	UserAlreadyExists: "用户已存在",

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"ai-cloud/pkgs/errcode"
 	"errors"
 	"net/http"
 	"strings"
@@ -20,7 +21,7 @@ func JWT() gin.HandlerFunc {
 		authHeader := c.GetHeader(AuthHeaderKey)
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    401,
+				"code":    errcode.TokenMissing,
 				"message": "需要认证令牌",
 			})
 			return
@@ -30,8 +31,8 @@ func JWT() gin.HandlerFunc {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != AuthBearerType {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    401,
-				"message": "令牌格式错误，应为 Bearer <token>",
+				"code":    errcode.TokenError,
+				"message": "令牌格式错误",
 			})
 			return
 		}
@@ -41,12 +42,14 @@ func JWT() gin.HandlerFunc {
 		claims, err := ParseToken(tokenString)
 		if err != nil {
 			status := http.StatusUnauthorized
+			code := errcode.TokenError
 			message := "无效令牌"
 
 			// 新版错误处理
 			switch {
 			case errors.Is(err, jwt.ErrTokenExpired):
 				message = "令牌已过期"
+				code = errcode.TokenExpired
 				status = http.StatusForbidden
 			case errors.Is(err, jwt.ErrTokenMalformed):
 				message = "令牌格式错误"
@@ -55,7 +58,7 @@ func JWT() gin.HandlerFunc {
 			}
 
 			c.AbortWithStatusJSON(status, gin.H{
-				"code":    status,
+				"code":    code,
 				"message": message,
 			})
 			return
