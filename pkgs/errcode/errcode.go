@@ -1,49 +1,42 @@
 package errcode
 
 const (
-	// 系统级错误码
-	ServerError        = 10000
-	ParamBindError     = 10001
-	AuthorizationError = 10002
-	TokenError         = 10003
-	TokenExpired       = 10004
-	TokenMissing       = 10005
+	/******************** 基础错误码 (10000-19999) ********************/
+	// 通用系统错误
+	SuccessCode         = 0     // 特殊保留成功码
+	InternalServerError = 10001 // 服务器内部错误
+	DatabaseError       = 10002 // 数据库操作错误
+	CacheError          = 10003 // 缓存服务错误
+	RateLimitExceeded   = 10004 // 请求频率限制
 
-	// 用户模块错误码 (20000-29999)
-	UserNotFound      = 20001
-	UserAlreadyExists = 20002
-	PasswordError     = 20003
-	UserRegisterError = 20004
+	// 请求参数相关
+	ParamBindError     = 10101 // 参数绑定错误
+	ParamValidateError = 10102 // 参数验证失败
 
-	// 文件模块错误码 (30000-39999)
-	FileNotFound    = 30001
-	FileUploadError = 30002
-	FileDeleteError = 30003
+	// 认证授权相关
+	UnauthorizedError = 10201 // 身份未认证
+	ForbiddenError    = 10202 // 无访问权限
+	TokenExpired      = 10203 // Token过期
+	TokenInvalid      = 10204 // Token无效
+	TokenMissing      = 10205 // Token缺失
+
+	/******************** 业务错误码 ********************/
+	// 用户模块 (20000-20999)
+	UserNotFound      = 20001 // 用户不存在
+	UserAlreadyExists = 20002 // 用户已存在
+	PasswordMismatch  = 20003 // 密码错误
+	UserDisabled      = 20004 // 用户被禁用
+	EmailInvalid      = 20005 // 邮箱格式错误
+
+	// 文件模块 (21000-21999)
+	FileNotFound     = 21001 // 文件不存在
+	FileUploadFailed = 21002 // 文件上传失败
+	FileDeleteFailed = 21003 // 文件删除失败
+	FileSizeExceeded = 21004 // 文件大小超限
+	FileTypeInvalid  = 21005 // 文件类型无效
+	FileParseFailed  = 21006 // 文件解析失败
+	FileListFailed   = 21007
+
+	// 订单模块 (22000-22999)
+	// 可后续扩展...
 )
-
-// 错误码消息映射
-var codeMessages = map[int]string{
-	ServerError:        "服务器内部错误",
-	ParamBindError:     "参数绑定错误",
-	AuthorizationError: "认证失败",
-	TokenError:         "无效的Token",
-	TokenExpired:       "Token已过期",
-	TokenMissing:       "Token缺失",
-
-	UserNotFound:      "用户不存在",
-	UserAlreadyExists: "用户已存在",
-	PasswordError:     "密码错误",
-	UserRegisterError: "用户注册错误",
-
-	FileNotFound:    "文件不存在",
-	FileUploadError: "文件上传失败",
-	FileDeleteError: "文件删除失败",
-}
-
-// GetMessage 获取错误码对应的消息
-func GetMessage(code int) string {
-	if msg, ok := codeMessages[code]; ok {
-		return msg
-	}
-	return "未知错误"
-}

@@ -31,7 +31,7 @@ func JWTAuth() gin.HandlerFunc {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != AuthBearerType {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code":    errcode.TokenError,
+				"code":    errcode.TokenInvalid,
 				"message": "令牌格式错误",
 			})
 			return
@@ -42,7 +42,7 @@ func JWTAuth() gin.HandlerFunc {
 		claims, err := ParseToken(tokenString)
 		if err != nil {
 			status := http.StatusUnauthorized
-			code := errcode.TokenError
+			code := errcode.TokenInvalid
 			message := "无效令牌"
 
 			// 新版错误处理

@@ -20,16 +20,16 @@ func NewUserDao(db *gorm.DB) UserDao {
 	return &userDao{db: db}
 }
 
-func (r *userDao) CheckFieldExists(field string, value interface{}) (bool, error) {
+func (ud *userDao) CheckFieldExists(field string, value interface{}) (bool, error) {
 	var count int64
-	if err := r.db.Model(&model.User{}).Where(field+" = ?", value).Count(&count).Error; err != nil {
+	if err := ud.db.Model(&model.User{}).Where(field+" = ?", value).Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
 }
 
-func (r *userDao) CreateUser(user *model.User) error {
-	result := r.db.Create(user)
+func (ud *userDao) CreateUser(user *model.User) error {
+	result := ud.db.Create(user)
 
 	if result.Error != nil {
 		return result.Error
@@ -37,9 +37,9 @@ func (r *userDao) CreateUser(user *model.User) error {
 	return nil
 }
 
-func (r *userDao) GetUserByName(name string) (*model.User, error) {
+func (ud *userDao) GetUserByName(name string) (*model.User, error) {
 	var user model.User
-	result := r.db.Model(&model.User{}).Where("username = ?", name).First(&user)
+	result := ud.db.Model(&model.User{}).Where("username = ?", name).First(&user)
 	if result.Error != nil {
 		return nil, result.Error
 	}

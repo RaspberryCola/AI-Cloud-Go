@@ -14,15 +14,16 @@ type Response struct {
 
 // 分页数据结构
 type PageData struct {
-	List     interface{} `json:"list"`      // 数据列表
-	Total    int64       `json:"total"`     // 总数
-	Page     int         `json:"page"`      // 当前页码
-	PageSize int         `json:"page_size"` // 每页数量
+	Total int64       `json:"total"` // 总数
+	List  interface{} `json:"list"`  // 数据列表
 }
 
 const (
-	SUCCESS = 0
-	ERROR   = 1
+	SUCCESS      = 0
+	ERROR        = 1
+	ERROR_PARAM  = 2
+	ERROR_AUTH   = 401
+	ERROR_SERVER = 500
 )
 
 // Success 成功响应
@@ -44,15 +45,13 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 }
 
 // PageSuccess 分页数据响应
-func PageSuccess(c *gin.Context, list interface{}, total int64, page, pageSize int) {
+func PageSuccess(c *gin.Context, list interface{}, total int64) {
 	c.JSON(http.StatusOK, Response{
 		Code:    SUCCESS,
 		Message: "success",
 		Data: PageData{
-			List:     list,
-			Total:    total,
-			Page:     page,
-			PageSize: pageSize,
+			List:  list,
+			Total: total,
 		},
 	})
 }
@@ -66,20 +65,40 @@ func Error(c *gin.Context, message string) {
 	})
 }
 
-// ErrorWithCode 错误响应带自定义错误码
-func ErrorWithCode(c *gin.Context, code int, message string) {
-	c.JSON(http.StatusOK, Response{
+//// ErrorWithCode 错误响应带自定义错误码
+//func ErrorWithCode(c *gin.Context, code int, message string) {
+//	c.JSON(http.StatusOK, Response{
+//		Code:    code,
+//		Message: message,
+//		Data:    nil,
+//	})
+//}
+
+// 错误响应
+func ErrorCustom(c *gin.Context, httpCode, code int, msg string, data interface{}) {
+	c.JSON(httpCode, Response{
 		Code:    code,
-		Message: message,
-		Data:    nil,
+		Message: msg,
+		Data:    data,
+	})
+}
+func ParamError(c *gin.Context, code int, msg string) {
+	c.JSON(http.StatusBadRequest, Response{
+		Code:    code,
+		Message: msg,
 	})
 }
 
-// ParamError 参数错误响应
-func ParamError(c *gin.Context) {
-	c.JSON(http.StatusOK, Response{
-		Code:    ERROR,
-		Message: "参数错误",
-		Data:    nil,
+func UnauthorizedError(c *gin.Context, code int, msg string) {
+	c.JSON(http.StatusUnauthorized, Response{
+		Code:    code,
+		Message: msg,
+	})
+}
+
+func InternalError(c *gin.Context, code int, msg string) {
+	c.JSON(http.StatusInternalServerError, Response{
+		Code:    code,
+		Message: msg,
 	})
 }
