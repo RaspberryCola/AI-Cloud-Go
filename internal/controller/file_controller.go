@@ -7,9 +7,10 @@ import (
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 type FileController struct {
