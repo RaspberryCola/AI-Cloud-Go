@@ -7,9 +7,10 @@ import (
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 type FileController struct {
@@ -63,7 +64,7 @@ func (fc *FileController) Upload(ctx *gin.Context) {
 
 }
 
-func (fc *FileController) List(ctx *gin.Context) {
+func (fc *FileController) PageList(ctx *gin.Context) {
 	// 获取用户ID并验证
 	userID, err := utils.GetUserIDFromContext(ctx)
 	if err != nil {

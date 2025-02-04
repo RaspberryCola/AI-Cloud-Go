@@ -21,7 +21,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 		auth.Use(middleware.JWTAuth())
 		{
 			auth.POST("/upload", fc.Upload)
-			auth.GET("/page", fc.List)
+			auth.GET("/page", fc.PageList)
 			auth.GET("/download", fc.Download)
 			auth.DELETE("/delete", fc.Delete)
 			auth.POST("/folder", fc.CreateFolder)
