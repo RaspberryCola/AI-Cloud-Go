@@ -65,7 +65,7 @@ func (kc *KBController) PageList(ctx *gin.Context) {
 	response.PageSuccess(ctx, kbs, total)
 }
 
-func (kc *KBController) AddFile(ctx *gin.Context) {
+func (kc *KBController) AddExistFile(ctx *gin.Context) {
 	// 获取用户ID并验证
 	userID, err := utils.GetUserIDFromContext(ctx)
 	if err != nil {
@@ -86,6 +86,64 @@ func (kc *KBController) AddFile(ctx *gin.Context) {
 		response.InternalError(ctx, errcode.InternalServerError, "添加文件到知识库失败")
 		return
 	}
+	// 处理解析文档
+	if err = kc.kbService.ProcessDocument(doc); err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, err.Error())
+		return
+	}
+	response.SuccessWithMessage(ctx, "添加文件到知识库成功", nil)
+}
+
+// 上传新的文件到知识库
+func (kc *KBController) AddNewFile(ctx *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 获取知识库ID
+	kbID := ctx.PostForm("kb_id")
+	if kbID == "" {
+		response.ParamError(ctx, errcode.ParamBindError, "知识库ID不能为空")
+		return
+	}
+
+	fileHeader, err := ctx.FormFile("file")
+	if err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "文件上传失败")
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "文件打开失败")
+		return
+	}
+	defer file.Close()
+
+	folerID, err := kc.fileService.InitKnowledgeDir(userID)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "初始化知识库目录失败"+err.Error())
+		return
+	}
+	fileID, err := kc.fileService.UploadFile(userID, fileHeader, file, folerID)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "文件上传失败")
+		return
+	}
+
+	// 将文件添加到知识库中
+	f, err := kc.fileService.GetFileByID(fileID)
+	if err != nil || f == nil { // 添加对 nil 的检查
+		response.InternalError(ctx, errcode.InternalServerError, "获取文件信息失败")
+		return
+	}
+	doc, err := kc.kbService.CreateDocument(userID, kbID, f)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "添加文件到知识库失败")
+		return
+	}
+
 	if err = kc.kbService.ProcessDocument(doc); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return

@@ -36,7 +36,8 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 		{
 			kb.POST("/create", kc.Create)
 			kb.GET("/page", kc.PageList)
-			kb.POST("/add", kc.AddFile)
+			kb.POST("/add", kc.AddExistFile)
+			kb.POST("/addNew", kc.AddNewFile)
 		}
 	}
 }

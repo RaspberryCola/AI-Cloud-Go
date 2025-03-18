@@ -49,7 +49,7 @@ func (fc *FileController) Upload(ctx *gin.Context) {
 	parentID := ctx.PostForm("parent_id") // 空字符串表示根目录
 
 	// 调用 Service 层处理文件上传
-	err = fc.fileService.UploadFile(userID, fileHeader, file, parentID)
+	_, err = fc.fileService.UploadFile(userID, fileHeader, file, parentID)
 	if err != nil {
 		response.InternalError(ctx, errcode.FileUploadFailed, "上传失败")
 		return

@@ -34,7 +34,7 @@ type kbService struct {
 
 func NewKBService(kbDao dao.KnowledgeBaseDao, embedder *openai.LLM, fileService FileService) KBService {
 	cfg := weaviate.Config{
-		Host:   "localhost:8080", // Weaviate 默认地址
+		Host:   "localhost:8081", // Weaviate 默认地址
 		Scheme: "http",
 	}
 	client := weaviate.New(cfg)
@@ -131,6 +131,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 
 	// 从文档中提取文本并分割
 	var chunks []model.Chunk
+
 	for _, d := range docs {
 		// 对每个文档的内容进行分割
 		texts, err := splitter.SplitText(d.PageContent)

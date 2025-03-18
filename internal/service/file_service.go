@@ -7,6 +7,7 @@ import (
 	"ai-cloud/internal/storage"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"io"
 	"log"
 	"mime"
@@ -18,7 +19,7 @@ import (
 )
 
 type FileService interface {
-	UploadFile(userID uint, fileHeader *multipart.FileHeader, file multipart.File, parentID string) error
+	UploadFile(userID uint, fileHeader *multipart.FileHeader, file multipart.File, parentID string) (string, error)
 	GetFileURL(key string) (string, error)
 	PageList(userID uint, parentID *string, page int, pageSize int, sort string) (int64, []model.File, error)
 	DownloadFile(fileID string) (*model.File, []byte, error)
@@ -30,6 +31,7 @@ type FileService interface {
 	GetFilePath(fileID string) (string, error)
 	GetFileIDPath(fileID string) (string, error)
 	GetFileByID(fileID string) (*model.File, error)
+	InitKnowledgeDir(userID uint) (string, error)
 }
 
 type fileService struct {
@@ -47,7 +49,7 @@ func NewFileService(fileDao dao.FileDao) FileService {
 	return &fileService{fileDao: fileDao, storageDriver: driver}
 }
 
-func (fs *fileService) UploadFile(userID uint, fileHeader *multipart.FileHeader, file multipart.File, parentID string) error {
+func (fs *fileService) UploadFile(userID uint, fileHeader *multipart.FileHeader, file multipart.File, parentID string) (string, error) {
 	fileID := GenerateUUID()
 	newFile := model.File{
 		ID:          fileID,
@@ -69,20 +71,20 @@ func (fs *fileService) UploadFile(userID uint, fileHeader *multipart.FileHeader,
 	// Read file data
 	fileData, err := io.ReadAll(file)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 	//
 	// Upload file to storage
 	if err := fs.storageDriver.Upload(fileData, newFile.StorageKey); err != nil {
-		return fmt.Errorf("failed to upload file: %w", err)
+		return "", fmt.Errorf("failed to upload file: %w", err)
 	}
 
 	// Save file metadata to database
 	if err := fs.fileDao.CreateFile(&newFile); err != nil {
-		return fmt.Errorf("failed to create file metadata: %w", err)
+		return "", fmt.Errorf("failed to create file metadata: %w", err)
 	}
 
-	return nil
+	return fileID, nil
 }
 
 func (fs *fileService) GetFileURL(key string) (string, error) {
@@ -409,4 +411,28 @@ func (fs *fileService) GetFileByID(fileID string) (*model.File, error) {
 		return nil, err
 	}
 	return file, nil
+}
+
+func (fs *fileService) InitKnowledgeDir(userID uint) (string, error) {
+	file, err := fs.fileDao.GetDocumentDir(userID)
+	if err != nil {
+		// 只有在记录不存在时才创建新目录
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			newFolder := &model.File{
+				ID:        GenerateUUID(),
+				UserID:    userID,
+				IsDir:     true,
+				Name:      "知识库文件",
+				ParentID:  nil,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := fs.fileDao.CreateFile(newFolder); err != nil {
+				return "", fmt.Errorf("创建知识库目录失败: %w", err)
+			}
+			return newFolder.ID, nil
+		}
+		return "", fmt.Errorf("查询知识库目录失败: %w", err)
+	}
+	return file.ID, nil
 }

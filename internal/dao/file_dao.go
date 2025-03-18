@@ -19,6 +19,7 @@ type FileDao interface {
 	UpdateFile(file *model.File) error
 	CountFilesByKeyword(key string, userID uint) (int64, error)
 	GetFilesByKeyword(userID uint, key string, page int, pageSize int, sort string) ([]model.File, error)
+	GetDocumentDir(userID uint) (*model.File, error)
 }
 
 // fileDao 实现了FileDao接口，提供文件相关操作
@@ -218,4 +219,15 @@ func (fd *fileDao) UpdateFile(file *model.File) error {
 		return errors.New("数据库未初始化")
 	}
 	return fd.db.Save(file).Error
+}
+
+func (fd *fileDao) GetDocumentDir(userID uint) (*model.File, error) {
+	// 初始化结构体
+	file := &model.File{}
+	err := fd.db.Where("user_id = ? AND name = ? AND is_dir = ? AND parent_id IS NULL",
+		userID, "知识库文件", true).First(file).Error
+	if err != nil {
+		return nil, err // 直接返回错误，包括 gorm.ErrRecordNotFound
+	}
+	return file, nil
 }
