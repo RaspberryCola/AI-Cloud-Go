@@ -59,27 +59,12 @@ type CORSConfig struct {
 	MaxAge           string   `mapstructure:"max_age"` // 使用字符串表示时间，便于配置
 }
 
-type MilvusConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     string `mapstructure:"port"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-}
-
-type RAGConfig struct {
-	ChunkSize      int          `mapstructure:"chunk_size"`
-	ChunkOverlap   int          `mapstructure:"chunk_overlap"`
-	Milvus         MilvusConfig `mapstructure:"milvus"`
-	EmbeddingModel string       `mapstructure:"embedding_model"`
-}
-
 type AppConfig struct {
-	Server    ServerConfig   `mapstructure:"server"`
-	Database  DatabaseConfig `mapstructure:"database"`
-	JWT       JWTConfig      `mapstructure:"jwt"`
-	Storage   StorageConfig  `mapstructure:"storage"`
-	CORS      CORSConfig     `mapstructure:"cors"`
-	RAGConfig RAGConfig      `mapstructure:"rag"`
+	Server   ServerConfig   `mapstructure:"server"`
+	Database DatabaseConfig `mapstructure:"database"`
+	JWT      JWTConfig      `mapstructure:"jwt"`
+	Storage  StorageConfig  `mapstructure:"storage"`
+	CORS     CORSConfig     `mapstructure:"cors"`
 }
 
 var AppConfigInstance *AppConfig
