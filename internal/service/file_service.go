@@ -29,6 +29,7 @@ type FileService interface {
 	Rename(userID uint, fileID string, newName string) error
 	GetFilePath(fileID string) (string, error)
 	GetFileIDPath(fileID string) (string, error)
+	GetFileByID(fileID string) (*model.File, error)
 }
 
 type fileService struct {
@@ -400,4 +401,12 @@ func (fs *fileService) GetFileIDPath(fileID string) (string, error) {
 	}
 
 	return "/root/" + path, nil
+}
+
+func (fs *fileService) GetFileByID(fileID string) (*model.File, error) {
+	file, err := fs.fileDao.GetFileMetaByFileID(fileID)
+	if err != nil {
+		return nil, err
+	}
+	return file, nil
 }

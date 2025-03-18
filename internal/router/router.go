@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController) {
+func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController) {
 	api := r.Group("/api")
 	{
 
@@ -30,6 +30,13 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			auth.PUT("/rename", fc.Rename)
 			auth.GET("/path", fc.GetPath)
 			auth.GET("/id-path", fc.GetIDPath)
+		}
+		kb := api.Group("knowledge")
+		kb.Use(middleware.JWTAuth())
+		{
+			kb.POST("/create", kc.Create)
+			kb.GET("/page", kc.PageList)
+			kb.POST("/add", kc.AddFile)
 		}
 	}
 }
