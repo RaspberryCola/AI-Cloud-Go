@@ -23,7 +23,7 @@ type KBService interface {
 	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error)     // 获取知识库列表
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error) // 添加File到知识库
 	ProcessDocument(doc *model.Document) error                                          // 解析嵌入文档（后续需要细化）
-	// TODO：检索知识库 Retrieve
+	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)   // 新增检索方法
 	// TODO: 移动Document到其他知识库
 
 }
@@ -326,4 +326,101 @@ func (ks *kbService) saveChunksToMilvus(chunks []model.Chunk) error {
 	}
 
 	return nil
+}
+
+func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error) {
+
+	ctx := context.Background()
+
+	// 1. 权限校验
+	kb, err := ks.kbDao.GetKBByID(kbID)
+	if err != nil {
+		return nil, fmt.Errorf("知识库不存在: %w", err)
+	}
+	if kb.UserID != userID {
+		return nil, errors.New("无访问权限")
+	}
+
+	queryList := []string{query}
+
+	// 2. 向量化query
+	embeddings, err := ks.embedder.CreateEmbedding(ctx, queryList)
+	//query_embeds := embeddings[0]
+
+	if err != nil {
+		return nil, fmt.Errorf("查询向量化失败: %w", err)
+	}
+
+	// 3. Milvus向量检索
+	collectionName := "text_chunks"
+
+	// 构建搜索参数
+	sp, _ := entity.NewIndexIvfFlatSearchParam(16) // nprobe=16
+	vector := embeddings[0]                        // 假设embeddings已经是[]float32
+
+	// 构建搜索条件
+	expr := fmt.Sprintf("kb_id == \"%s\"", kbID)
+
+	// 执行搜索
+	searchResult, err := ks.milvus.Search(
+		ctx,
+		collectionName,
+		[]string{}, // 分区列表
+		expr,       // 过滤表达式
+		[]string{"id", "content", "document_id", "kb_id", "chunk_index"}, // 输出字段
+		[]entity.Vector{entity.FloatVector(vector)},                      // 查询向量
+		"vector",  // 向量字段名
+		entity.L2, // 距离度量
+		topK,      // topK
+		sp,        // 搜索参数
+	)
+	if err != nil {
+		return nil, fmt.Errorf("向量检索失败: %w", err)
+	}
+
+	// 4. 转换结果
+	var chunks []model.Chunk
+	for _, result := range searchResult {
+		idColumn := result.IDs.(*entity.ColumnVarChar)
+		contentColumn := result.Fields[1].(*entity.ColumnVarChar)
+		docIDColumn := result.Fields[2].(*entity.ColumnVarChar)
+		kbIDColumn := result.Fields[3].(*entity.ColumnVarChar)
+		indexColumn := result.Fields[4].(*entity.ColumnInt32)
+
+		// 获取结果数量
+		resultCount := idColumn.Len()
+
+		for i := 0; i < resultCount; i++ {
+			id := idColumn.Data()[i]
+			content, err := contentColumn.GetAsString(i)
+			if err != nil {
+				return nil, fmt.Errorf("获取内容失败: %w", err)
+			}
+
+			docID, err := docIDColumn.GetAsString(i)
+			if err != nil {
+				return nil, fmt.Errorf("获取文档ID失败: %w", err)
+			}
+
+			kb_ID, err := kbIDColumn.GetAsString(i)
+			if err != nil {
+				return nil, fmt.Errorf("获取知识库ID失败: %w", err)
+			}
+
+			index := indexColumn.Data()[i]
+			if err != nil {
+				return nil, fmt.Errorf("获取索引失败: %w", err)
+			}
+
+			chunks = append(chunks, model.Chunk{
+				ID:         id,
+				Content:    content,
+				KBID:       kb_ID,
+				DocumentID: docID,
+				Index:      int(index),
+			})
+		}
+	}
+
+	return chunks, nil
 }

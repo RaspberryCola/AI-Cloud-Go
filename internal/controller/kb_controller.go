@@ -182,3 +182,33 @@ func (kc *KBController) AddNewFile(ctx *gin.Context) {
 	}
 	response.SuccessWithMessage(ctx, "添加文件到知识库成功", nil)
 }
+
+func (kc *KBController) Retrieve(ctx *gin.Context) {
+	// 1. 获取用户ID
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 2. 解析请求参数
+	var req struct {
+		KBID  string `json:"kb_id"`
+		Query string `json:"query"`
+		TopK  int    `json:"top_k"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	// 3. 调用服务层检索
+	chunks, err := kc.kbService.Retrieve(userID, req.KBID, req.Query, req.TopK)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, err.Error())
+		return
+	}
+
+	// 4. 返回结果
+	response.Success(ctx, chunks)
+}
