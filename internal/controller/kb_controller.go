@@ -6,6 +6,7 @@ import (
 	"ai-cloud/internal/utils"
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,7 +15,7 @@ type KBController struct {
 	fileService service.FileService
 }
 
-func NewKBCotroller(kbService service.KBService, fileService service.FileService) *KBController {
+func NewKBController(kbService service.KBService, fileService service.FileService) *KBController {
 	return &KBController{kbService: kbService, fileService: fileService}
 }
 
@@ -40,6 +41,33 @@ func (kc *KBController) Create(ctx *gin.Context) {
 	}
 
 	response.SuccessWithMessage(ctx, "创建知识库成功", nil)
+}
+
+// 删除知识库
+func (kc *KBController) Delete(ctx *gin.Context) {
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 获取知识库ID
+	var req struct {
+		KBID string `json:"kb_id"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	// 删除知识库
+	if err := kc.kbService.DeleteKB(userID, req.KBID); err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, err.Error())
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "删除知识库成功", nil)
 }
 
 func (kc *KBController) PageList(ctx *gin.Context) {
@@ -79,6 +107,10 @@ func (kc *KBController) AddExistFile(ctx *gin.Context) {
 		return
 	}
 	file, err := kc.fileService.GetFileByID(req.FileID)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "获取文件信息失败")
+		return
+	}
 
 	// 添加文件到知识库
 	doc, err := kc.kbService.CreateDocument(userID, req.KBID, file)
@@ -121,12 +153,12 @@ func (kc *KBController) AddNewFile(ctx *gin.Context) {
 	}
 	defer file.Close()
 
-	folerID, err := kc.fileService.InitKnowledgeDir(userID)
+	folderID, err := kc.fileService.InitKnowledgeDir(userID)
 	if err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "初始化知识库目录失败"+err.Error())
 		return
 	}
-	fileID, err := kc.fileService.UploadFile(userID, fileHeader, file, folerID)
+	fileID, err := kc.fileService.UploadFile(userID, fileHeader, file, folderID)
 	if err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "文件上传失败")
 		return

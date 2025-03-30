@@ -8,9 +8,10 @@ import (
 	"ai-cloud/internal/middleware"
 	"ai-cloud/internal/router"
 	"ai-cloud/internal/service"
+	"log"
+
 	"github.com/gin-gonic/gin"
 	"github.com/tmc/langchaingo/llms/openai"
-	"log"
 )
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 
 	kbDao := dao.NewKnowledgeBaseDao(db)
 	kbService := service.NewKBService(kbDao, embedder, fileService)
-	kbController := controller.NewKBCotroller(kbService, fileService)
+	kbController := controller.NewKBController(kbService, fileService)
 
 	r := gin.Default()
 	// 配置跨域

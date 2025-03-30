@@ -19,10 +19,15 @@ import (
 )
 
 type KBService interface {
-	CreateDB(name, description string, userID uint) error
-	PageList(userId uint, page int, size int) (int64, []model.KnowledgeBase, error)
+	CreateDB(name, description string, userID uint) error // 创建知识库
+	DeleteKB(userID uint, kbid string) error              // 删除知识库
+	// TODO：修改知识库（名称、说明）
+	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error)     // 获取知识库列表
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error) // 添加File到知识库
-	ProcessDocument(doc *model.Document) error
+	ProcessDocument(doc *model.Document) error                                          // 解析嵌入文档（后续需要细化）
+	// TODO：检索知识库 Retrieve
+	// TODO: 移动Document到其他知识库
+
 }
 
 type kbService struct {
@@ -62,6 +67,22 @@ func (ks *kbService) CreateDB(name, description string, userID uint) error {
 
 	if err := ks.kbDao.CreateKB(kb); err != nil {
 		return errors.New("知识库创建失败")
+	}
+	return nil
+}
+
+func (ks *kbService) DeleteKB(userID uint, kbid string) error {
+
+	kb, err := ks.kbDao.GetKBByID(kbid)
+	if err != nil {
+		return errors.New("知识库不存在")
+	}
+	if kb.UserID != userID {
+		return errors.New("无删除权限")
+	}
+
+	if err := ks.kbDao.DeleteKB(kbid); err != nil {
+		return errors.New("知识库删除失败")
 	}
 	return nil
 }

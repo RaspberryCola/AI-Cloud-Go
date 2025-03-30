@@ -13,6 +13,7 @@ type KnowledgeBaseDao interface {
 	DeleteKB(id string) error
 	CreateDocument(doc *model.Document) error
 	UpdateDocument(doc *model.Document) error
+	GetKBByID(kb_id string) (*model.KnowledgeBase, error)
 }
 
 type kbDao struct {
@@ -27,6 +28,14 @@ func (kd *kbDao) CreateKB(kb *model.KnowledgeBase) error {
 		return result.Error
 	}
 	return nil
+}
+
+func (kd *kbDao) GetKBByID(kb_id string) (*model.KnowledgeBase, error) {
+	kb := &model.KnowledgeBase{}
+	if err := kd.db.Where("id = ?", kb_id).First(kb).Error; err != nil {
+		return nil, err
+	}
+	return kb, nil
 }
 
 func (kd *kbDao) CountKBs(userID uint) (int64, error) {
