@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tmc/langchaingo/schema"
+	"github.com/unidoc/unipdf/v3/common/license"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -14,6 +16,9 @@ import (
 	"github.com/tmc/langchaingo/documentloaders"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/textsplitter"
+
+	"github.com/unidoc/unipdf/v3/extractor"
+	unipdf "github.com/unidoc/unipdf/v3/model"
 )
 
 type KBService interface {
@@ -130,24 +135,23 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	}
 
 	// 2. 根据文件类型选择合适的加载器
-	var loader documentloaders.Loader
+	var docs []schema.Document
 	switch doc.DocType {
 	case "text/plain", "txt", "text/plain; charset=utf-8":
-		loader = documentloaders.NewText(bytes.NewReader(fileData))
+		loader := documentloaders.NewText(bytes.NewReader(fileData))
+		docs, err = loader.Load(ctx)
 	case "application/pdf", "pdf":
-		reader := bytes.NewReader(fileData)
-		loader = documentloaders.NewPDF(reader, int64(len(fileData)))
+		// 使用 UniDoc 处理 PDF
+		docs, err = ks.processPDFWithUniDoc(fileData)
 	default:
 		return fmt.Errorf("不支持的文档类型: %s", doc.DocType)
 	}
 
-	// 3. 加载文档
-	docs, err := loader.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("加载文档失败: %w", err)
 	}
 
-	// 4. 文本分割
+	// 3. 文本分割
 	splitter := textsplitter.NewRecursiveCharacter(
 		textsplitter.WithChunkSize(500),
 		textsplitter.WithChunkOverlap(100),
@@ -190,12 +194,12 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 		}
 	}
 
-	// 6. 将 chunks 存储到 Milvus
+	// 4. 将 chunks 存储到 Milvus
 	if err := ks.saveChunksToMilvus(chunks); err != nil {
 		return fmt.Errorf("存储向量到 Milvus 失败: %w", err)
 	}
 
-	// 7. 更新文档状态
+	// 5. 更新文档状态
 	doc.Status = 2 // 已完成
 	doc.UpdatedAt = time.Now()
 	if err := ks.kbDao.UpdateDocument(doc); err != nil {
@@ -205,6 +209,62 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	return nil
 }
 
+// processPDFWithUniDoc 使用 UniDoc 解析 PDF 文件
+func (ks *kbService) processPDFWithUniDoc(fileData []byte) ([]schema.Document, error) {
+	var docs []schema.Document
+
+	err := license.SetMeteredKey("0095a64c07b44dc56b2dc5036072a4c10542e01ca34df29d77a81d7afd89b20e")
+	if err != nil {
+		panic(err)
+	}
+	// 从字节数据创建 reader
+	reader := bytes.NewReader(fileData)
+
+	// 创建 PDF reader
+	pdfReader, err := unipdf.NewPdfReader(reader)
+	if err != nil {
+		return nil, fmt.Errorf("创建 PDF reader 失败: %w", err)
+	}
+
+	// 获取页数
+	numPages, err := pdfReader.GetNumPages()
+	if err != nil {
+		return nil, fmt.Errorf("获取 PDF 页数失败: %w", err)
+	}
+
+	// 逐页提取文本
+	for i := 0; i < numPages; i++ {
+		pageNum := i + 1
+
+		page, err := pdfReader.GetPage(pageNum)
+		if err != nil {
+			return nil, fmt.Errorf("获取第 %d 页失败: %w", pageNum, err)
+		}
+
+		ex, err := extractor.New(page)
+		if err != nil {
+			return nil, fmt.Errorf("创建提取器失败: %w", err)
+		}
+
+		text, err := ex.ExtractText()
+		if err != nil {
+			return nil, fmt.Errorf("提取文本失败: %w", err)
+		}
+
+		// 将每页内容作为一个文档
+		doc := schema.Document{
+			PageContent: text,
+			Metadata: map[string]interface{}{
+				"page":     pageNum,
+				"total":    numPages,
+				"doc_type": "pdf",
+			},
+		}
+		docs = append(docs, doc)
+	}
+
+	return docs, nil
+}
 func (ks *kbService) saveChunksToMilvus(chunks []model.Chunk) error {
 	ctx := context.Background()
 	collectionName := "text_chunks"
