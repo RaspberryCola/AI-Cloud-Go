@@ -7,15 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/go-openapi/strfmt"
-	"github.com/weaviate/weaviate/entities/models"
-	"strings"
 	"time"
 
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
+	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/tmc/langchaingo/documentloaders"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/textsplitter"
-	"github.com/weaviate/weaviate-go-client/v4/weaviate"
 )
 
 type KBService interface {
@@ -31,23 +29,28 @@ type KBService interface {
 }
 
 type kbService struct {
-	kbDao       dao.KnowledgeBaseDao
-	embedder    *openai.LLM
-	weaviate    *weaviate.Client
+	kbDao    dao.KnowledgeBaseDao
+	embedder *openai.LLM
+	// weaviate    *weaviate.Client
+	milvus      client.Client
 	fileService FileService
 }
 
 func NewKBService(kbDao dao.KnowledgeBaseDao, embedder *openai.LLM, fileService FileService) KBService {
-	cfg := weaviate.Config{
-		Host:   "localhost:8081", // Weaviate 默认地址
-		Scheme: "http",
+	// 初始化Milvus客户端
+	milvusClient, err := client.NewClient(context.Background(), client.Config{
+		Address:  "localhost:19530", // Milvus默认地址
+		Username: "ai_cloud",
+		Password: "aicloud666",
+	})
+	if err != nil {
+		panic("无法连接到Milvus: " + err.Error())
 	}
-	client := weaviate.New(cfg)
 
 	return &kbService{
 		kbDao:       kbDao,
 		embedder:    embedder,
-		weaviate:    client,
+		milvus:      milvusClient,
 		fileService: fileService,
 	}
 }
@@ -147,7 +150,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	// 4. 文本分割
 	splitter := textsplitter.NewRecursiveCharacter(
 		textsplitter.WithChunkSize(500),
-		textsplitter.WithChunkOverlap(50),
+		textsplitter.WithChunkOverlap(100),
 	)
 
 	// 从文档中提取文本并分割
@@ -187,8 +190,8 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 		}
 	}
 
-	// 6. 将 chunks 存储到 Weaviate
-	if err := ks.saveChunksToWeaviate(chunks); err != nil {
+	// 6. 将 chunks 存储到 Milvus
+	if err := ks.saveChunksToMilvus(chunks); err != nil {
 		return fmt.Errorf("存储向量到 Milvus 失败: %w", err)
 	}
 
@@ -202,70 +205,125 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	return nil
 }
 
-func (ks *kbService) saveChunksToWeaviate(chunks []model.Chunk) error {
+func (ks *kbService) saveChunksToMilvus(chunks []model.Chunk) error {
 	ctx := context.Background()
+	collectionName := "text_chunks"
 
-	// 确保 class 存在
-	classObj := &models.Class{
-		Class: "TextChunk",
-		Properties: []*models.Property{
-			{
-				Name:     "content",
-				DataType: []string{"text"},
-			},
-			{
-				Name:     "documentId",
-				DataType: []string{"string"},
-			},
-			{
-				Name:     "index",
-				DataType: []string{"int"},
-			},
-			{
-				Name:     "kbId",
-				DataType: []string{"string"},
-			},
-		},
-		Vectorizer: "none", // 因为我们自己提供向量
-	}
-
-	// 创建 class（如果不存在）
-	err := ks.weaviate.Schema().ClassCreator().WithClass(classObj).Do(ctx)
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
-		return fmt.Errorf("创建 schema 失败: %w", err)
-	}
-
-	// 批量添加数据
-	batcher := ks.weaviate.Batch().ObjectsBatcher()
-	for _, chunk := range chunks {
-		fmt.Printf("Chunk ID: %s, Embeddings: %v\n", chunk.ID, chunk.Embeddings)
-		properties := map[string]interface{}{
-			"content":    chunk.Content,
-			"documentId": chunk.DocumentID,
-			"index":      chunk.Index,
-			"kbId":       chunk.KBID,
-		}
-
-		obj := &models.Object{
-			Class:      "TextChunk",
-			ID:         strfmt.UUID(chunk.ID),
-			Properties: properties,
-			Vector:     chunk.Embeddings,
-		}
-
-		batcher = batcher.WithObject(obj)
-	}
-
-	resp, err := batcher.Do(ctx)
+	// 检查集合是否存在
+	exists, err := ks.milvus.HasCollection(ctx, collectionName)
 	if err != nil {
-		return fmt.Errorf("批量插入数据失败: %w", err)
+		return fmt.Errorf("检查集合存在失败: %w", err)
 	}
 
-	// 检查是否所有对象都成功创建
-	for _, result := range resp {
-		if result.Result.Errors != nil {
-			return fmt.Errorf("部分数据插入失败: %w", result.Result.Errors)
+	// 如果集合不存在，则创建
+	if !exists {
+		// 定义schema
+		schema := &entity.Schema{
+			CollectionName: collectionName,
+			Description:    "存储文档分块和向量",
+			AutoID:         false,
+			Fields: []*entity.Field{
+				{
+					Name:       "id",
+					DataType:   entity.FieldTypeVarChar,
+					PrimaryKey: true,
+					AutoID:     false,
+					TypeParams: map[string]string{
+						"max_length": "64",
+					},
+				},
+				{
+					Name:     "content",
+					DataType: entity.FieldTypeVarChar,
+					TypeParams: map[string]string{
+						"max_length": "65535",
+					},
+				},
+				{
+					Name:     "document_id",
+					DataType: entity.FieldTypeVarChar,
+					TypeParams: map[string]string{
+						"max_length": "64",
+					},
+				},
+				{
+					Name:     "kb_id",
+					DataType: entity.FieldTypeVarChar,
+					TypeParams: map[string]string{
+						"max_length": "64",
+					},
+				},
+				{
+					Name:     "chunk_index",
+					DataType: entity.FieldTypeInt32,
+				},
+				{
+					Name:     "vector",
+					DataType: entity.FieldTypeFloatVector,
+					TypeParams: map[string]string{
+						"dim": "1024",
+					},
+				},
+			},
+		}
+
+		// 创建集合
+		err = ks.milvus.CreateCollection(ctx, schema, 1) // 1是分片数
+		if err != nil {
+			return fmt.Errorf("创建集合失败: %w", err)
 		}
 	}
+
+	// 准备插入数据
+	var ids []string
+	var contents []string
+	var documentIDs []string
+	var kbIDs []string
+	var chunkIndices []int32
+	var vectors [][]float32
+
+	for _, chunk := range chunks {
+		ids = append(ids, chunk.ID)
+		contents = append(contents, chunk.Content)
+		documentIDs = append(documentIDs, chunk.DocumentID)
+		kbIDs = append(kbIDs, chunk.KBID)
+		chunkIndices = append(chunkIndices, int32(chunk.Index))
+		vectors = append(vectors, chunk.Embeddings)
+	}
+
+	// 创建插入的数据列
+	idColumn := entity.NewColumnVarChar("id", ids)
+	contentColumn := entity.NewColumnVarChar("content", contents)
+	documentIDColumn := entity.NewColumnVarChar("document_id", documentIDs)
+	kbIDColumn := entity.NewColumnVarChar("kb_id", kbIDs)
+	indexColumn := entity.NewColumnInt32("chunk_index", chunkIndices)
+	vectorColumn := entity.NewColumnFloatVector("vector", 1024, vectors)
+
+	// 插入数据
+	_, err = ks.milvus.Insert(ctx, collectionName, "", idColumn, contentColumn, documentIDColumn, kbIDColumn, indexColumn, vectorColumn)
+	if err != nil {
+		return fmt.Errorf("插入数据失败: %w", err)
+	}
+
+	// 创建索引（如果不存在）
+	index, err := ks.milvus.DescribeIndex(ctx, collectionName, "vector")
+	if err != nil || index == nil {
+		idx, err := entity.NewIndexIvfFlat(entity.L2, 128) // 使用IVF_FLAT索引
+		if err != nil {
+			return fmt.Errorf("创建索引失败: %w", err)
+		}
+
+		err = ks.milvus.CreateIndex(ctx, collectionName, "vector", idx, false)
+		if err != nil {
+			return fmt.Errorf("创建索引失败: %w", err)
+		}
+	}
+
+	// 加载集合到内存
+	err = ks.milvus.LoadCollection(ctx, collectionName, false)
+	if err != nil {
+		return fmt.Errorf("加载集合失败: %w", err)
+	}
+
 	return nil
 }
