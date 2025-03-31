@@ -9,6 +9,7 @@ require (
 	github.com/cloudwego/eino-ext/components/document/loader/url v0.0.0-20250328102648-b47e7f1587fa
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20250328102648-b47e7f1587fa
 	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20250328102648-b47e7f1587fa
+	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250328102648-b47e7f1587fa
 	github.com/gin-contrib/cors v1.7.3
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -16,7 +17,6 @@ require (
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/minio/minio-go/v7 v7.0.84
 	github.com/spf13/viper v1.19.0
-	github.com/tmc/langchaingo v0.1.13
 	golang.org/x/crypto v0.33.0
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.12
@@ -31,11 +31,10 @@ require (
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20241224063832-9fbcc0e56c28 // indirect
-	github.com/cloudwego/eino-ext/libs/acl/openai v0.0.0-20250221090944-e8ef7aabbe10 // indirect
+	github.com/cloudwego/eino-ext/libs/acl/openai v0.0.0-20250305023926-469de0301955 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
-	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
@@ -81,7 +80,6 @@ require (
 	github.com/perimeterx/marshmallow v1.1.4 // indirect
 	github.com/pingcap/errors v0.11.5-0.20211224045212-9687c2b0f87c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
@@ -101,11 +99,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
-	gitlab.com/golang-commonmark/html v0.0.0-20191124015941-a22733972181 // indirect
-	gitlab.com/golang-commonmark/linkify v0.0.0-20191026162114-a0c2df6c8f82 // indirect
-	gitlab.com/golang-commonmark/markdown v0.0.0-20211110145824-bf3e522c626a // indirect
-	gitlab.com/golang-commonmark/mdurl v0.0.0-20191124015652-932350d1cb84 // indirect
-	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/arch v0.12.0 // indirect

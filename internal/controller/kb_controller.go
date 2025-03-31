@@ -6,6 +6,7 @@ import (
 	"ai-cloud/internal/utils"
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
+	"encoding/json"
 
 	"github.com/gin-gonic/gin"
 )
@@ -237,4 +238,39 @@ func (kc *KBController) Chat(ctx *gin.Context) {
 	// 4. 返回结果
 	response.Success(ctx, resp)
 
+}
+
+func (kc *KBController) ChatStream(ctx *gin.Context) {
+	// 1. 获取用户ID
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 2. 解析请求参数
+	var req model.ChatRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	// 3. 设置响应头
+	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
+	ctx.Writer.Header().Set("Cache-Control", "no-cache")
+	ctx.Writer.Header().Set("Connection", "keep-alive")
+
+	// 4. 调用服务层获取流式响应
+	responseChan, err := kc.kbService.RAGQueryStream(ctx.Request.Context(), userID, req.Query, req.KBs)
+	if err != nil {
+		ctx.SSEvent("error", err.Error())
+		return
+	}
+
+	// 5. 发送流式响应
+	for response := range responseChan {
+		data, _ := json.Marshal(response)
+		ctx.Writer.Write([]byte("data: " + string(data) + "\n\n"))
+		ctx.Writer.Flush()
+	}
 }

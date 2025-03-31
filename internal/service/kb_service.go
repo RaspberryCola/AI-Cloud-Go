@@ -5,6 +5,7 @@ import (
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
+
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino-ext/components/model/openai"
@@ -13,6 +14,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	openaiEmbed "github.com/cloudwego/eino-ext/components/embedding/openai"
@@ -29,6 +31,7 @@ type KBService interface {
 	ProcessDocument(doc *model.Document) error                                          // 解析嵌入文档（后续需要细化）
 	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)   // 获取检索的Chunks
 	RAGQuery(userID uint, query string, kbIDs []string) (*model.ChatResponse, error)    // 新增RAG查询方法
+	RAGQueryStream(ctx context.Context, userID uint, query string, kbIDs []string) (<-chan *model.ChatStreamResponse, error)
 	// TODO: 移动Document到其他知识库
 
 }
@@ -309,4 +312,107 @@ func (ks *kbService) RAGQuery(userID uint, query string, kbIDs []string) (*model
 		Response:   response.Content,
 		References: allChunks,
 	}, nil
+}
+
+// RAGQueryStream 实现流式RAG查询
+func (ks *kbService) RAGQueryStream(ctx context.Context, userID uint, query string, kbIDs []string) (<-chan *model.ChatStreamResponse, error) {
+	// 创建响应通道
+	responseChan := make(chan *model.ChatStreamResponse)
+
+	// 1. 权限校验
+	for _, kbID := range kbIDs {
+		kb, err := ks.kbDao.GetKBByID(kbID)
+		if err != nil {
+			return nil, fmt.Errorf("知识库不存在: %w", err)
+		}
+		if kb.UserID != userID {
+			return nil, errors.New("无访问权限")
+		}
+	}
+
+	// 2. 从每个知识库检索相关内容
+	var allChunks []model.Chunk
+	for _, kbID := range kbIDs {
+		chunks, err := ks.Retrieve(userID, kbID, query, 3)
+		if err != nil {
+			return nil, err
+		}
+		allChunks = append(allChunks, chunks...)
+	}
+
+	// 3. 构建提示词
+	var context string
+	for _, chunk := range allChunks {
+		context += chunk.Content + "\n"
+	}
+
+	systemPrompt := "你是一个知识库助手。请基于以下参考内容回答用户问题。如果无法从参考内容中得到答案，请明确告知。\n参考内容:\n" + context
+
+	messages := []*schema.Message{
+		schema.SystemMessage(systemPrompt),
+		schema.UserMessage(query),
+	}
+
+	// 4. 启动goroutine处理流式响应
+	go func() {
+		defer close(responseChan)
+
+		reader, err := ks.llm.Stream(ctx, messages)
+		if err != nil {
+			return
+		}
+		defer reader.Close()
+
+		id := GenerateUUID()
+		created := time.Now().Unix()
+		for {
+			chunk, err := reader.Recv()
+			if err != nil {
+				// Send a final message with finish_reason if it's EOF
+				if err == io.EOF {
+					stop := "stop"
+					response := &model.ChatStreamResponse{
+						ID:      id,
+						Object:  "chat.completion.chunk",
+						Created: created,
+						Model:   "deepseek-v3-250324",
+						Choices: []model.ChatStreamChoice{
+							{
+								Delta:        model.ChatStreamDelta{},
+								Index:        0,
+								FinishReason: &stop,
+							},
+						},
+					}
+					responseChan <- response
+				}
+				break
+			}
+
+			response := &model.ChatStreamResponse{
+				ID:      id,
+				Object:  "chat.completion.chunk",
+				Created: created,
+				Model:   "deepseek-v3-250324",
+				Choices: []model.ChatStreamChoice{
+					{
+						Delta: model.ChatStreamDelta{
+							Content: chunk.Content,
+						},
+						Index:        0,
+						FinishReason: nil,
+					},
+				},
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case responseChan <- response:
+			}
+		}
+
+	}()
+
+	return responseChan, nil
 }
