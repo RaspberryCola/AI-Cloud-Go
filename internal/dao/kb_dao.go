@@ -14,6 +14,8 @@ type KnowledgeBaseDao interface {
 	CreateDocument(doc *model.Document) error
 	UpdateDocument(doc *model.Document) error
 	GetKBByID(kb_id string) (*model.KnowledgeBase, error)
+	CountDocs(id string) (int64, error)
+	ListDocs(id string, page int, size int) ([]model.Document, error)
 }
 
 type kbDao struct {
@@ -58,6 +60,26 @@ func (kd *kbDao) ListKBs(userID uint, page int, pageSize int) ([]model.Knowledge
 		return nil, err
 	}
 	return kbs, nil
+}
+func (kd *kbDao) CountDocs(kbID string) (int64, error) {
+	var total int64
+	query := kd.db.Model(&model.Document{}).Where("knowledge_base_id = ?", kbID)
+	if err := query.Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (kd *kbDao) ListDocs(kbID string, page int, size int) ([]model.Document, error) {
+	var docs []model.Document
+	query := kd.db.Where("knowledge_base_id = ?", kbID).Order("created_at asc")
+
+	offset := (page - 1) * size
+	query = query.Offset(offset).Limit(size)
+	if err := query.Find(&docs).Error; err != nil {
+		return nil, err
+	}
+	return docs, nil
 }
 func (kd *kbDao) DeleteKB(id string) error {
 	return kd.db.Where("id = ?", id).Delete(&model.KnowledgeBase{}).Error

@@ -7,6 +7,7 @@ import (
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
 	"encoding/json"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -94,6 +95,27 @@ func (kc *KBController) PageList(ctx *gin.Context) {
 	response.PageSuccess(ctx, kbs, total)
 }
 
+func (kc *KBController) DocPage(ctx *gin.Context) {
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+	page, pageSize, err := utils.ParsePaginationParams(ctx)
+	if err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "分页参数错误")
+		return
+	}
+	kbID := ctx.Query("kb_id")
+	total, docs, err := kc.kbService.DocList(userID, kbID, page, pageSize)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "获取列表失败")
+		fmt.Printf(err.Error())
+		return
+	}
+	response.PageSuccess(ctx, docs, total)
+}
 func (kc *KBController) AddExistFile(ctx *gin.Context) {
 	// 获取用户ID并验证
 	userID, err := utils.GetUserIDFromContext(ctx)

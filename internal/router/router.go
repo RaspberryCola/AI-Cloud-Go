@@ -41,6 +41,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			kb.POST("/retrieve", kc.Retrieve)
 			kb.POST("/chat", kc.Chat)
 			kb.POST("/stream", kc.ChatStream)
+			kb.GET("/docPage", kc.DocPage)
 		}
 	}
 }

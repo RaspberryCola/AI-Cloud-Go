@@ -23,17 +23,17 @@ import (
 )
 
 type KBService interface {
-	CreateDB(name, description string, userID uint) error // 创建知识库
-	DeleteKB(userID uint, kbid string) error              // 删除知识库
-	// TODO：修改知识库（名称、说明）
-	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error)     // 获取知识库列表
-	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error) // 添加File到知识库
-	ProcessDocument(doc *model.Document) error                                          // 解析嵌入文档（后续需要细化）
-	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)   // 获取检索的Chunks
-	RAGQuery(userID uint, query string, kbIDs []string) (*model.ChatResponse, error)    // 新增RAG查询方法
-	RAGQueryStream(ctx context.Context, userID uint, query string, kbIDs []string) (<-chan *model.ChatStreamResponse, error)
+	CreateDB(name, description string, userID uint) error                                                                    // 创建知识库
+	DeleteKB(userID uint, kbid string) error                                                                                 // 删除知识库
+	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error)                                          // 获取知识库列表
+	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)                                      // 添加File到知识库
+	ProcessDocument(doc *model.Document) error                                                                               // 解析嵌入文档（后续需要细化）
+	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)                                        // 获取检索的Chunks
+	RAGQuery(userID uint, query string, kbIDs []string) (*model.ChatResponse, error)                                         // 新增RAG查询方法
+	RAGQueryStream(ctx context.Context, userID uint, query string, kbIDs []string) (<-chan *model.ChatStreamResponse, error) // 流式对话
+	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error)                                   // 获取知识库下的文件列表
 	// TODO: 移动Document到其他知识库
-
+	// TODO：修改知识库（名称、说明）
 }
 
 type kbService struct {
@@ -415,4 +415,27 @@ func (ks *kbService) RAGQueryStream(ctx context.Context, userID uint, query stri
 	}()
 
 	return responseChan, nil
+}
+
+func (ks *kbService) DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) {
+	kb, err := ks.kbDao.GetKBByID(kbID)
+	if err != nil {
+		return 0, nil, fmt.Errorf("获取知识库失败：%v", err)
+	}
+
+	if kb.UserID != userID {
+		return 0, nil, fmt.Errorf("无查看知识库权限: %v", err)
+	}
+
+	total, err := ks.kbDao.CountDocs(kbID)
+	if err != nil {
+		return 0, nil, fmt.Errorf("获取count错误：%v", err)
+	}
+
+	docs, err := ks.kbDao.ListDocs(kbID, page, size)
+	if err != nil {
+		return 0, nil, fmt.Errorf("获取docs错误：%v", err)
+	}
+
+	return total, docs, nil
 }
