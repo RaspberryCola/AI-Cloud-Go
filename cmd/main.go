@@ -8,10 +8,7 @@ import (
 	"ai-cloud/internal/middleware"
 	"ai-cloud/internal/router"
 	"ai-cloud/internal/service"
-	"log"
-
 	"github.com/gin-gonic/gin"
-	"github.com/tmc/langchaingo/llms/openai"
 )
 
 func main() {
@@ -26,18 +23,8 @@ func main() {
 	fileService := service.NewFileService(fileDao)
 	fileController := controller.NewFileController(fileService)
 
-	opts := []openai.Option{
-		openai.WithBaseURL("https://dashscope.aliyuncs.com/compatible-mode/v1"),
-		openai.WithEmbeddingModel("text-embedding-v3"),
-		openai.WithToken("sk-98077dd2f6d74722ba818a4d52e6dee9"),
-	}
-	embedder, err := openai.New(opts...)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	kbDao := dao.NewKnowledgeBaseDao(db)
-	kbService := service.NewKBService(kbDao, embedder, fileService)
+	kbService := service.NewKBService(kbDao, fileService)
 	kbController := controller.NewKBController(kbService, fileService)
 
 	r := gin.Default()

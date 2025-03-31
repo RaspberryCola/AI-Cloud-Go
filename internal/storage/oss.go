@@ -32,7 +32,7 @@ func NewOSSStorage(cfg config.OSSConfig) (*OSSStorage, error) {
 }
 
 // Upload 上传文件到OSS
-func (s *OSSStorage) Upload(data []byte, key string) error {
+func (s *OSSStorage) Upload(data []byte, key string, contentType string) error {
 	return s.bucket.PutObject(key, bytes.NewReader(data))
 }
 

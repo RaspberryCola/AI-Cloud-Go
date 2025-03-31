@@ -21,7 +21,7 @@ func NewLocalStorage(baseDir string) (*LocalStorage, error) {
 }
 
 // Upload 上传文件到本地
-func (s *LocalStorage) Upload(data []byte, key string) error {
+func (s *LocalStorage) Upload(data []byte, key string, contentType string) error {
 	fullPath := filepath.Join(s.baseDir, key)
 	// 确保父目录存在
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {

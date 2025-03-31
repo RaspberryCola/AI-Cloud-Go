@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
@@ -60,11 +61,18 @@ func NewMinioStorage(cfg config.MinioConfig) (Driver, error) {
 }
 
 // Upload 上传文件到 Minio
-func (m *MinioStorage) Upload(data []byte, key string) error {
+func (m *MinioStorage) Upload(data []byte, key string, contentType string) error {
 	reader := bytes.NewReader(data)
-	_, err := m.client.PutObject(context.Background(), m.bucket, key, reader, int64(len(data)), minio.PutObjectOptions{
-		ContentType: "application/octet-stream",
-	})
+	_, err := m.client.PutObject(
+		context.Background(),
+		m.bucket,
+		key,
+		reader,
+		int64(len(data)),
+		minio.PutObjectOptions{
+			ContentType: contentType, // 例如 "application/pdf"
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("failed to upload file: %v", err)
 	}
@@ -73,7 +81,12 @@ func (m *MinioStorage) Upload(data []byte, key string) error {
 
 // Download 从 Minio 下载文件
 func (m *MinioStorage) Download(key string) ([]byte, error) {
-	obj, err := m.client.GetObject(context.Background(), m.bucket, key, minio.GetObjectOptions{})
+	obj, err := m.client.GetObject(
+		context.Background(),
+		m.bucket,
+		key,
+		minio.GetObjectOptions{},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get object: %v", err)
 	}
@@ -95,14 +108,24 @@ func (m *MinioStorage) Delete(key string) error {
 	return nil
 }
 
-// GetURL 获取文件的访问URL
 func (m *MinioStorage) GetURL(key string) (string, error) {
+	// 设置响应头，强制浏览器下载文件
+	reqParams := make(url.Values)
+	reqParams.Set("response-content-disposition", "attachment")
+
 	// 生成预签名URL，有效期1小时
-	expiry := time.Second * 3600 // 1小时
-	presignedURL, err := m.client.PresignedGetObject(context.Background(), m.bucket, key, expiry, nil)
+	expiry := time.Hour * 1
+	presignedURL, err := m.client.PresignedGetObject(
+		context.Background(),
+		m.bucket,
+		key,
+		expiry,
+		reqParams, // 关键：传递自定义参数
+	)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate presigned URL: %v", err)
 	}
+
 	return presignedURL.String(), nil
 }
 

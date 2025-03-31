@@ -1,24 +1,25 @@
 package service
 
 import (
+	"ai-cloud/config"
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
-	"bytes"
+	"ai-cloud/internal/storage"
+	"github.com/cloudwego/eino-ext/components/document/loader/url"
+	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
+
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tmc/langchaingo/schema"
-	"github.com/unidoc/unipdf/v3/common/license"
+	"github.com/cloudwego/eino-ext/components/embedding/openai"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
-	"github.com/tmc/langchaingo/documentloaders"
-	"github.com/tmc/langchaingo/llms/openai"
-	"github.com/tmc/langchaingo/textsplitter"
 
-	"github.com/unidoc/unipdf/v3/extractor"
-	unipdf "github.com/unidoc/unipdf/v3/model"
+	"github.com/cloudwego/eino/components/document"
+	//"github.com/cloudwego/eino/components/document/parser"
+	//"github.com/cloudwego/eino/schema"
 )
 
 type KBService interface {
@@ -34,14 +35,15 @@ type KBService interface {
 }
 
 type kbService struct {
-	kbDao    dao.KnowledgeBaseDao
-	embedder *openai.LLM
-	// weaviate    *weaviate.Client
-	milvus      client.Client
-	fileService FileService
+	kbDao         dao.KnowledgeBaseDao
+	milvus        client.Client
+	fileService   FileService
+	storageDriver storage.Driver
+	embedder      *openai.Embedder
 }
 
-func NewKBService(kbDao dao.KnowledgeBaseDao, embedder *openai.LLM, fileService FileService) KBService {
+func NewKBService(kbDao dao.KnowledgeBaseDao, fileService FileService) KBService {
+	ctx := context.Background()
 	// 初始化Milvus客户端
 	milvusClient, err := client.NewClient(context.Background(), client.Config{
 		Address:  "localhost:19530", // Milvus默认地址
@@ -51,12 +53,28 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, embedder *openai.LLM, fileService 
 	if err != nil {
 		panic("无法连接到Milvus: " + err.Error())
 	}
+	cfg := config.AppConfigInstance.Storage
+	driver, err := storage.NewDriver(cfg)
+	if err != nil {
+		panic("无法连接到存储服务: " + err.Error())
+	}
+
+	// embedder
+	dimesion := 1024
+	embedder, _ := openai.NewEmbedder(ctx, &openai.EmbeddingConfig{
+		APIKey:     "sk-98077dd2f6d74722ba818a4d52e6dee9",
+		Model:      "text-embedding-v3",
+		BaseURL:    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		Timeout:    30 * time.Second,
+		Dimensions: &dimesion,
+	})
 
 	return &kbService{
-		kbDao:       kbDao,
-		embedder:    embedder,
-		milvus:      milvusClient,
-		fileService: fileService,
+		kbDao:         kbDao,
+		milvus:        milvusClient,
+		fileService:   fileService,
+		storageDriver: driver,
+		embedder:      embedder,
 	}
 }
 func (ks *kbService) CreateDB(name, description string, userID uint) error {
@@ -125,73 +143,87 @@ func (ks *kbService) CreateDocument(userID uint, kbID string, file *model.File) 
 	return doc, nil
 }
 
+// 解析一个文件
 func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	ctx := context.Background()
 
-	// 1. 获取文件内容
-	_, fileData, err := ks.fileService.DownloadFile(doc.FileID)
+	// 1. 获取File
+	f := &model.File{}
+	f, err := ks.fileService.GetFileByID(doc.FileID)
 	if err != nil {
-		return fmt.Errorf("下载文件失败: %w", err)
+		return fmt.Errorf("获取文件失败: %w", err)
 	}
 
-	// 2. 根据文件类型选择合适的加载器
-	var docs []schema.Document
-	switch doc.DocType {
-	case "text/plain", "txt", "text/plain; charset=utf-8":
-		loader := documentloaders.NewText(bytes.NewReader(fileData))
-		docs, err = loader.Load(ctx)
-	case "application/pdf", "pdf":
-		// 使用 UniDoc 处理 PDF
-		docs, err = ks.processPDFWithUniDoc(fileData)
-	default:
-		return fmt.Errorf("不支持的文档类型: %s", doc.DocType)
-	}
+	fURL, _ := ks.storageDriver.GetURL(f.StorageKey)
 
+	// 2. Loader 加载文档，获取schema.Document
+	loader, err := url.NewLoader(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("创建Loader失败: %w", err)
+	}
+	docs, err := loader.Load(ctx, document.Source{
+		URI: fURL,
+	})
 	if err != nil {
 		return fmt.Errorf("加载文档失败: %w", err)
 	}
+	for _, d := range docs {
+		d.ID = f.Name
+	}
+
+	//_, fileData, err := ks.fileService.DownloadFile(doc.FileID)
+	//if err != nil {
+	//	return fmt.Errorf("下载文件失败: %w", err)
+	//}
+
+	//// 2. 根据文件类型选择合适的加载器
+	//var docs []schema.Document
+	//switch doc.DocType {
+	//case "text/plain", "txt", "text/plain; charset=utf-8":
+	//	loader := documentloaders.NewText(bytes.NewReader(fileData))
+	//	docs, err = loader.Load(ctx)
+	//case "application/pdf", "pdf":
+	//	// 使用 UniDoc 处理 PDF
+	//	//docs, err = ks.processPDFWithUniDoc(fileData)
+	//default:
+	//	return fmt.Errorf("不支持的文档类型: %s", doc.DocType)
+	//}
+	//
+	//if err != nil {
+	//	return fmt.Errorf("加载文档失败: %w", err)
+	//}
 
 	// 3. 文本分割
-	splitter := textsplitter.NewRecursiveCharacter(
-		textsplitter.WithChunkSize(500),
-		textsplitter.WithChunkOverlap(100),
-	)
+	splitter, err := recursive.NewSplitter(ctx, &recursive.Config{
+		ChunkSize:   500,
+		OverlapSize: 300,
+	})
+	if err != nil {
+		return fmt.Errorf("加载分块器失败: %w", err)
+	}
 
-	// 从文档中提取文本并分割
+	texts, err := splitter.Transform(ctx, docs)
+	if err != nil {
+		return fmt.Errorf("分块失败: %w", err)
+	}
+
+	//
+
 	var chunks []model.Chunk
 
-	for _, d := range docs {
-		// 对每个文档的内容进行分割
-		texts, err := splitter.SplitText(d.PageContent)
-		if err != nil {
-			return fmt.Errorf("分割文本失败: %w", err)
+	for i, text := range texts {
+		textString := []string{text.Content}
+		vectors64, _ := ks.embedder.EmbedStrings(ctx, textString)
+		float32Vectors := ConvertFloat64ToFloat32Embeddings(vectors64)
+		chunk := model.Chunk{
+			ID:         GenerateUUID(),
+			Content:    text.Content,
+			KBID:       doc.KnowledgeBaseID,
+			DocumentID: doc.ID,
+			Index:      i,
+			Embeddings: float32Vectors[0],
 		}
-
-		batchSize := 10
-
-		for i := 0; i < len(texts); i += batchSize {
-			end := i + batchSize
-			if end > len(texts) {
-				end = len(texts)
-			}
-			textBatch := texts[i:end]
-			ebds, err := ks.embedder.CreateEmbedding(ctx, textBatch)
-			if err != nil {
-				return fmt.Errorf("创建嵌入失败: %w", err)
-			}
-
-			for j, embedding := range ebds {
-				chunk := model.Chunk{
-					ID:         GenerateUUID(),
-					Content:    textBatch[j],
-					KBID:       doc.KnowledgeBaseID,
-					DocumentID: doc.ID,
-					Index:      i + j,
-					Embeddings: embedding,
-				}
-				chunks = append(chunks, chunk)
-			}
-		}
+		chunks = append(chunks, chunk)
 	}
 
 	// 4. 将 chunks 存储到 Milvus
@@ -209,62 +241,18 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	return nil
 }
 
-// processPDFWithUniDoc 使用 UniDoc 解析 PDF 文件
-func (ks *kbService) processPDFWithUniDoc(fileData []byte) ([]schema.Document, error) {
-	var docs []schema.Document
-
-	err := license.SetMeteredKey("0095a64c07b44dc56b2dc5036072a4c10542e01ca34df29d77a81d7afd89b20e")
-	if err != nil {
-		panic(err)
-	}
-	// 从字节数据创建 reader
-	reader := bytes.NewReader(fileData)
-
-	// 创建 PDF reader
-	pdfReader, err := unipdf.NewPdfReader(reader)
-	if err != nil {
-		return nil, fmt.Errorf("创建 PDF reader 失败: %w", err)
-	}
-
-	// 获取页数
-	numPages, err := pdfReader.GetNumPages()
-	if err != nil {
-		return nil, fmt.Errorf("获取 PDF 页数失败: %w", err)
-	}
-
-	// 逐页提取文本
-	for i := 0; i < numPages; i++ {
-		pageNum := i + 1
-
-		page, err := pdfReader.GetPage(pageNum)
-		if err != nil {
-			return nil, fmt.Errorf("获取第 %d 页失败: %w", pageNum, err)
+func ConvertFloat64ToFloat32Embeddings(embeddings [][]float64) [][]float32 {
+	float32Embeddings := make([][]float32, len(embeddings))
+	for i, vec64 := range embeddings {
+		vec32 := make([]float32, len(vec64))
+		for j, v := range vec64 {
+			vec32[j] = float32(v)
 		}
-
-		ex, err := extractor.New(page)
-		if err != nil {
-			return nil, fmt.Errorf("创建提取器失败: %w", err)
-		}
-
-		text, err := ex.ExtractText()
-		if err != nil {
-			return nil, fmt.Errorf("提取文本失败: %w", err)
-		}
-
-		// 将每页内容作为一个文档
-		doc := schema.Document{
-			PageContent: text,
-			Metadata: map[string]interface{}{
-				"page":     pageNum,
-				"total":    numPages,
-				"doc_type": "pdf",
-			},
-		}
-		docs = append(docs, doc)
+		float32Embeddings[i] = vec32
 	}
-
-	return docs, nil
+	return float32Embeddings
 }
+
 func (ks *kbService) saveChunksToMilvus(chunks []model.Chunk) error {
 	ctx := context.Background()
 	collectionName := "text_chunks"
@@ -404,9 +392,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 	queryList := []string{query}
 
 	// 2. 向量化query
-	embeddings, err := ks.embedder.CreateEmbedding(ctx, queryList)
-	//query_embeds := embeddings[0]
-
+	embeddings, err := ks.embedder.EmbedStrings(ctx, queryList)
 	if err != nil {
 		return nil, fmt.Errorf("查询向量化失败: %w", err)
 	}
@@ -416,7 +402,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 
 	// 构建搜索参数
 	sp, _ := entity.NewIndexIvfFlatSearchParam(16) // nprobe=16
-	vector := embeddings[0]                        // 假设embeddings已经是[]float32
+	float32Vector := ConvertFloat64ToFloat32Embeddings(embeddings)[0]
 
 	// 构建搜索条件
 	expr := fmt.Sprintf("kb_id == \"%s\"", kbID)
@@ -428,7 +414,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 		[]string{}, // 分区列表
 		expr,       // 过滤表达式
 		[]string{"id", "content", "document_id", "kb_id", "chunk_index"}, // 输出字段
-		[]entity.Vector{entity.FloatVector(vector)},                      // 查询向量
+		[]entity.Vector{entity.FloatVector(float32Vector)},               // 查询向量
 		"vector",  // 向量字段名
 		entity.L2, // 距离度量
 		topK,      // topK

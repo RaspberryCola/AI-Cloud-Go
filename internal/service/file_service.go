@@ -51,14 +51,20 @@ func NewFileService(fileDao dao.FileDao) FileService {
 
 func (fs *fileService) UploadFile(userID uint, fileHeader *multipart.FileHeader, file multipart.File, parentID string) (string, error) {
 	fileID := GenerateUUID()
+
+	ext := filepath.Ext(fileHeader.Filename)
+	mimeType := mime.TypeByExtension(ext)
+
+	key := fmt.Sprintf("user%v-%s", userID, fileID)
+
 	newFile := model.File{
 		ID:          fileID,
 		UserID:      userID,
 		Name:        fileHeader.Filename,
 		Size:        fileHeader.Size,
-		MIMEType:    mime.TypeByExtension(filepath.Ext(fileHeader.Filename)),
+		MIMEType:    mimeType,
 		StorageType: config.AppConfigInstance.Storage.Type,
-		StorageKey:  GenerateStorageKey(userID, fileID),
+		StorageKey:  key,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
@@ -75,7 +81,7 @@ func (fs *fileService) UploadFile(userID uint, fileHeader *multipart.FileHeader,
 	}
 	//
 	// Upload file to storage
-	if err := fs.storageDriver.Upload(fileData, newFile.StorageKey); err != nil {
+	if err := fs.storageDriver.Upload(fileData, newFile.StorageKey, mimeType); err != nil {
 		return "", fmt.Errorf("failed to upload file: %w", err)
 	}
 
