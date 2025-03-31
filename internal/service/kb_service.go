@@ -5,14 +5,16 @@ import (
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
+
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cloudwego/eino-ext/components/embedding/openai"
 	"time"
+
+	"github.com/cloudwego/eino-ext/components/embedding/openai"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -427,41 +429,59 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 	// 4. 转换结果
 	var chunks []model.Chunk
 	for _, result := range searchResult {
-		idColumn := result.IDs.(*entity.ColumnVarChar)
-		contentColumn := result.Fields[1].(*entity.ColumnVarChar)
-		docIDColumn := result.Fields[2].(*entity.ColumnVarChar)
-		kbIDColumn := result.Fields[3].(*entity.ColumnVarChar)
-		indexColumn := result.Fields[4].(*entity.ColumnInt32)
+
+		// 先检查类型再转换
+		idCol, ok := result.IDs.(*entity.ColumnVarChar)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for ID column: %T", result.IDs)
+		}
+
+		contentCol, ok := result.Fields.GetColumn("content").(*entity.ColumnVarChar)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for content column: %T", result.Fields[1])
+		}
+
+		docIDCol, ok := result.Fields.GetColumn("document_id").(*entity.ColumnVarChar)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for document ID column: %T", result.Fields[2])
+		}
+
+		kbIDCol, ok := result.Fields.GetColumn("kb_id").(*entity.ColumnVarChar)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for KB ID column: %T", result.Fields[3])
+		}
+
+		indexCol, ok := result.Fields.GetColumn("chunk_index").(*entity.ColumnInt32)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for index column: %T", result.Fields[4])
+		}
 
 		// 获取结果数量
-		resultCount := idColumn.Len()
+		resultCount := idCol.Len()
 
 		for i := 0; i < resultCount; i++ {
-			id := idColumn.Data()[i]
-			content, err := contentColumn.GetAsString(i)
+			id := idCol.Data()[i]
+			content, err := contentCol.GetAsString(i)
 			if err != nil {
 				return nil, fmt.Errorf("获取内容失败: %w", err)
 			}
 
-			docID, err := docIDColumn.GetAsString(i)
+			docID, err := docIDCol.GetAsString(i)
 			if err != nil {
 				return nil, fmt.Errorf("获取文档ID失败: %w", err)
 			}
 
-			kb_ID, err := kbIDColumn.GetAsString(i)
+			kb_id, err := kbIDCol.GetAsString(i)
 			if err != nil {
 				return nil, fmt.Errorf("获取知识库ID失败: %w", err)
 			}
 
-			index := indexColumn.Data()[i]
-			if err != nil {
-				return nil, fmt.Errorf("获取索引失败: %w", err)
-			}
+			index := indexCol.Data()[i]
 
 			chunks = append(chunks, model.Chunk{
 				ID:         id,
 				Content:    content,
-				KBID:       kb_ID,
+				KBID:       kb_id,
 				DocumentID: docID,
 				Index:      int(index),
 			})
