@@ -16,12 +16,7 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/embedding/openai"
 
-	"github.com/milvus-io/milvus-sdk-go/v2/client"
-	"github.com/milvus-io/milvus-sdk-go/v2/entity"
-
 	"github.com/cloudwego/eino/components/document"
-	//"github.com/cloudwego/eino/components/document/parser"
-	//"github.com/cloudwego/eino/schema"
 )
 
 type KBService interface {
@@ -38,23 +33,15 @@ type KBService interface {
 
 type kbService struct {
 	kbDao         dao.KnowledgeBaseDao
-	milvus        client.Client
+	milvusDao     dao.MilvusDao
 	fileService   FileService
 	storageDriver storage.Driver
 	embedder      *openai.Embedder
 }
 
-func NewKBService(kbDao dao.KnowledgeBaseDao, fileService FileService) KBService {
+func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileService FileService) KBService {
 	ctx := context.Background()
-	// 初始化Milvus客户端
-	milvusClient, err := client.NewClient(context.Background(), client.Config{
-		Address:  "localhost:19530", // Milvus默认地址
-		Username: "ai_cloud",
-		Password: "aicloud666",
-	})
-	if err != nil {
-		panic("无法连接到Milvus: " + err.Error())
-	}
+
 	cfg := config.AppConfigInstance.Storage
 	driver, err := storage.NewDriver(cfg)
 	if err != nil {
@@ -73,7 +60,7 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, fileService FileService) KBService
 
 	return &kbService{
 		kbDao:         kbDao,
-		milvus:        milvusClient,
+		milvusDao:     milvusDao,
 		fileService:   fileService,
 		storageDriver: driver,
 		embedder:      embedder,
@@ -173,29 +160,9 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 		d.ID = f.Name
 	}
 
-	//_, fileData, err := ks.fileService.DownloadFile(doc.FileID)
-	//if err != nil {
-	//	return fmt.Errorf("下载文件失败: %w", err)
-	//}
-
-	//// 2. 根据文件类型选择合适的加载器
-	//var docs []schema.Document
-	//switch doc.DocType {
-	//case "text/plain", "txt", "text/plain; charset=utf-8":
-	//	loader := documentloaders.NewText(bytes.NewReader(fileData))
-	//	docs, err = loader.Load(ctx)
-	//case "application/pdf", "pdf":
-	//	// 使用 UniDoc 处理 PDF
-	//	//docs, err = ks.processPDFWithUniDoc(fileData)
-	//default:
-	//	return fmt.Errorf("不支持的文档类型: %s", doc.DocType)
-	//}
-	//
-	//if err != nil {
-	//	return fmt.Errorf("加载文档失败: %w", err)
-	//}
-
 	// 3. 文本分割
+	var chunks []model.Chunk
+
 	splitter, err := recursive.NewSplitter(ctx, &recursive.Config{
 		ChunkSize:   500,
 		OverlapSize: 300,
@@ -208,10 +175,6 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	if err != nil {
 		return fmt.Errorf("分块失败: %w", err)
 	}
-
-	//
-
-	var chunks []model.Chunk
 
 	for i, text := range texts {
 		textString := []string{text.Content}
@@ -229,7 +192,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	}
 
 	// 4. 将 chunks 存储到 Milvus
-	if err := ks.saveChunksToMilvus(chunks); err != nil {
+	if err := ks.milvusDao.SaveChunks(chunks); err != nil {
 		return fmt.Errorf("存储向量到 Milvus 失败: %w", err)
 	}
 
@@ -255,129 +218,6 @@ func ConvertFloat64ToFloat32Embeddings(embeddings [][]float64) [][]float32 {
 	return float32Embeddings
 }
 
-func (ks *kbService) saveChunksToMilvus(chunks []model.Chunk) error {
-	ctx := context.Background()
-	collectionName := "text_chunks"
-
-	// 检查集合是否存在
-	exists, err := ks.milvus.HasCollection(ctx, collectionName)
-	if err != nil {
-		return fmt.Errorf("检查集合存在失败: %w", err)
-	}
-
-	// 如果集合不存在，则创建
-	if !exists {
-		// 定义schema
-		schema := &entity.Schema{
-			CollectionName: collectionName,
-			Description:    "存储文档分块和向量",
-			AutoID:         false,
-			Fields: []*entity.Field{
-				{
-					Name:       "id",
-					DataType:   entity.FieldTypeVarChar,
-					PrimaryKey: true,
-					AutoID:     false,
-					TypeParams: map[string]string{
-						"max_length": "64",
-					},
-				},
-				{
-					Name:     "content",
-					DataType: entity.FieldTypeVarChar,
-					TypeParams: map[string]string{
-						"max_length": "65535",
-					},
-				},
-				{
-					Name:     "document_id",
-					DataType: entity.FieldTypeVarChar,
-					TypeParams: map[string]string{
-						"max_length": "64",
-					},
-				},
-				{
-					Name:     "kb_id",
-					DataType: entity.FieldTypeVarChar,
-					TypeParams: map[string]string{
-						"max_length": "64",
-					},
-				},
-				{
-					Name:     "chunk_index",
-					DataType: entity.FieldTypeInt32,
-				},
-				{
-					Name:     "vector",
-					DataType: entity.FieldTypeFloatVector,
-					TypeParams: map[string]string{
-						"dim": "1024",
-					},
-				},
-			},
-		}
-
-		// 创建集合
-		err = ks.milvus.CreateCollection(ctx, schema, 1) // 1是分片数
-		if err != nil {
-			return fmt.Errorf("创建集合失败: %w", err)
-		}
-	}
-
-	// 准备插入数据
-	var ids []string
-	var contents []string
-	var documentIDs []string
-	var kbIDs []string
-	var chunkIndices []int32
-	var vectors [][]float32
-
-	for _, chunk := range chunks {
-		ids = append(ids, chunk.ID)
-		contents = append(contents, chunk.Content)
-		documentIDs = append(documentIDs, chunk.DocumentID)
-		kbIDs = append(kbIDs, chunk.KBID)
-		chunkIndices = append(chunkIndices, int32(chunk.Index))
-		vectors = append(vectors, chunk.Embeddings)
-	}
-
-	// 创建插入的数据列
-	idColumn := entity.NewColumnVarChar("id", ids)
-	contentColumn := entity.NewColumnVarChar("content", contents)
-	documentIDColumn := entity.NewColumnVarChar("document_id", documentIDs)
-	kbIDColumn := entity.NewColumnVarChar("kb_id", kbIDs)
-	indexColumn := entity.NewColumnInt32("chunk_index", chunkIndices)
-	vectorColumn := entity.NewColumnFloatVector("vector", 1024, vectors)
-
-	// 插入数据
-	_, err = ks.milvus.Insert(ctx, collectionName, "", idColumn, contentColumn, documentIDColumn, kbIDColumn, indexColumn, vectorColumn)
-	if err != nil {
-		return fmt.Errorf("插入数据失败: %w", err)
-	}
-
-	// 创建索引（如果不存在）
-	index, err := ks.milvus.DescribeIndex(ctx, collectionName, "vector")
-	if err != nil || index == nil {
-		idx, err := entity.NewIndexIvfFlat(entity.L2, 128) // 使用IVF_FLAT索引
-		if err != nil {
-			return fmt.Errorf("创建索引失败: %w", err)
-		}
-
-		err = ks.milvus.CreateIndex(ctx, collectionName, "vector", idx, false)
-		if err != nil {
-			return fmt.Errorf("创建索引失败: %w", err)
-		}
-	}
-
-	// 加载集合到内存
-	err = ks.milvus.LoadCollection(ctx, collectionName, false)
-	if err != nil {
-		return fmt.Errorf("加载集合失败: %w", err)
-	}
-
-	return nil
-}
-
 func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error) {
 
 	ctx := context.Background()
@@ -400,93 +240,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 	}
 
 	// 3. Milvus向量检索
-	collectionName := "text_chunks"
-
-	// 构建搜索参数
-	sp, _ := entity.NewIndexIvfFlatSearchParam(16) // nprobe=16
 	float32Vector := ConvertFloat64ToFloat32Embeddings(embeddings)[0]
 
-	// 构建搜索条件
-	expr := fmt.Sprintf("kb_id == \"%s\"", kbID)
-
-	// 执行搜索
-	searchResult, err := ks.milvus.Search(
-		ctx,
-		collectionName,
-		[]string{}, // 分区列表
-		expr,       // 过滤表达式
-		[]string{"id", "content", "document_id", "kb_id", "chunk_index"}, // 输出字段
-		[]entity.Vector{entity.FloatVector(float32Vector)},               // 查询向量
-		"vector",  // 向量字段名
-		entity.L2, // 距离度量
-		topK,      // topK
-		sp,        // 搜索参数
-	)
-	if err != nil {
-		return nil, fmt.Errorf("向量检索失败: %w", err)
-	}
-
-	// 4. 转换结果
-	var chunks []model.Chunk
-	for _, result := range searchResult {
-
-		// 先检查类型再转换
-		idCol, ok := result.IDs.(*entity.ColumnVarChar)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for ID column: %T", result.IDs)
-		}
-
-		contentCol, ok := result.Fields.GetColumn("content").(*entity.ColumnVarChar)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for content column: %T", result.Fields[1])
-		}
-
-		docIDCol, ok := result.Fields.GetColumn("document_id").(*entity.ColumnVarChar)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for document ID column: %T", result.Fields[2])
-		}
-
-		kbIDCol, ok := result.Fields.GetColumn("kb_id").(*entity.ColumnVarChar)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for KB ID column: %T", result.Fields[3])
-		}
-
-		indexCol, ok := result.Fields.GetColumn("chunk_index").(*entity.ColumnInt32)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for index column: %T", result.Fields[4])
-		}
-
-		// 获取结果数量
-		resultCount := idCol.Len()
-
-		for i := 0; i < resultCount; i++ {
-			id := idCol.Data()[i]
-			content, err := contentCol.GetAsString(i)
-			if err != nil {
-				return nil, fmt.Errorf("获取内容失败: %w", err)
-			}
-
-			docID, err := docIDCol.GetAsString(i)
-			if err != nil {
-				return nil, fmt.Errorf("获取文档ID失败: %w", err)
-			}
-
-			kb_id, err := kbIDCol.GetAsString(i)
-			if err != nil {
-				return nil, fmt.Errorf("获取知识库ID失败: %w", err)
-			}
-
-			index := indexCol.Data()[i]
-
-			chunks = append(chunks, model.Chunk{
-				ID:         id,
-				Content:    content,
-				KBID:       kb_id,
-				DocumentID: docID,
-				Index:      int(index),
-			})
-		}
-	}
-
-	return chunks, nil
+	return ks.milvusDao.Search(kbID, float32Vector, topK)
 }

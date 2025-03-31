@@ -8,6 +8,7 @@ import (
 	"ai-cloud/internal/middleware"
 	"ai-cloud/internal/router"
 	"ai-cloud/internal/service"
+	"context"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,8 +24,12 @@ func main() {
 	fileService := service.NewFileService(fileDao)
 	fileController := controller.NewFileController(fileService)
 
+	ctx := context.Background()
+	milvus, _ := database.InitMilvus(ctx)
+	milvusDao := dao.NewMilvusDao(milvus)
+
 	kbDao := dao.NewKnowledgeBaseDao(db)
-	kbService := service.NewKBService(kbDao, fileService)
+	kbService := service.NewKBService(kbDao, milvusDao, fileService)
 	kbController := controller.NewKBController(kbService, fileService)
 
 	r := gin.Default()
