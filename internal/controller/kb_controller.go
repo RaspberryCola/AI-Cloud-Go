@@ -212,3 +212,29 @@ func (kc *KBController) Retrieve(ctx *gin.Context) {
 	// 4. 返回结果
 	response.Success(ctx, chunks)
 }
+
+func (kc *KBController) Chat(ctx *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 2. 解析请求参数
+	var req model.ChatRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	// 3. 调用服务层处理
+	resp, err := kc.kbService.RAGQuery(userID, req.Query, req.KBs)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, err.Error())
+		return
+	}
+
+	// 4. 返回结果
+	response.Success(ctx, resp)
+
+}
