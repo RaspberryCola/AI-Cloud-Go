@@ -29,13 +29,14 @@ type Document struct {
 
 // 存储到milvus中
 type Chunk struct {
-	ID         string    `json:"id"`
-	Content    string    `json:"content"`     // chunk内容
-	KBID       string    `json:"kb_id"`       // 知识库ID（知识库级别的检索）
-	DocumentID string    `json:"document_id"` // 文档ID
-	Index      int       `json:"index"`       // 第几个chunk
-	Embeddings []float32 `json:"embeddings"`  // chunk向量
-	Score      float32   `json:"score"`       // 返回分数信息
+	ID           string    `json:"id"`
+	Content      string    `json:"content"`       // chunk内容
+	KBID         string    `json:"kb_id"`         // 知识库ID（知识库级别的检索）
+	DocumentID   string    `json:"document_id"`   // 文档ID
+	DocumentName string    `json:"document_name"` // 文档名称
+	Index        int       `json:"index"`         // 第几个chunk
+	Embeddings   []float32 `json:"embeddings"`    // chunk向量
+	Score        float32   `json:"score"`         // 返回分数信息
 }
 
 type AddFileRequest struct {

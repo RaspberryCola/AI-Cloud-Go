@@ -201,12 +201,13 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 		vectors64, _ := ks.embedder.EmbedStrings(ctx, textString)
 		float32Vectors := ConvertFloat64ToFloat32Embeddings(vectors64)
 		chunk := model.Chunk{
-			ID:         GenerateUUID(),
-			Content:    text.Content,
-			KBID:       doc.KnowledgeBaseID,
-			DocumentID: doc.ID,
-			Index:      i,
-			Embeddings: float32Vectors[0],
+			ID:           GenerateUUID(),
+			Content:      text.Content,
+			KBID:         doc.KnowledgeBaseID,
+			DocumentID:   doc.ID,
+			DocumentName: doc.Title,
+			Index:        i,
+			Embeddings:   float32Vectors[0],
 		}
 		chunks = append(chunks, chunk)
 	}

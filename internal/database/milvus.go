@@ -62,6 +62,13 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 					},
 				},
 				{
+					Name:     "document_name",
+					DataType: entity.FieldTypeVarChar,
+					TypeParams: map[string]string{
+						"max_length": "64",
+					},
+				},
+				{
 					Name:     "kb_id",
 					DataType: entity.FieldTypeVarChar,
 					TypeParams: map[string]string{

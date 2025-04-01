@@ -31,6 +31,7 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 	var ids []string
 	var contents []string
 	var documentIDs []string
+	var documentNames []string
 	var kbIDs []string
 	var chunkIndices []int32
 	var vectors [][]float32
@@ -39,6 +40,7 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 		ids = append(ids, chunk.ID)
 		contents = append(contents, chunk.Content)
 		documentIDs = append(documentIDs, chunk.DocumentID)
+		documentNames = append(documentNames, chunk.DocumentName)
 		kbIDs = append(kbIDs, chunk.KBID)
 		chunkIndices = append(chunkIndices, int32(chunk.Index))
 		vectors = append(vectors, chunk.Embeddings)
@@ -48,6 +50,7 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 	idColumn := entity.NewColumnVarChar("id", ids)
 	contentColumn := entity.NewColumnVarChar("content", contents)
 	documentIDColumn := entity.NewColumnVarChar("document_id", documentIDs)
+	documentNameColumn := entity.NewColumnVarChar("document_name", documentNames)
 	kbIDColumn := entity.NewColumnVarChar("kb_id", kbIDs)
 	indexColumn := entity.NewColumnInt32("chunk_index", chunkIndices)
 	vectorColumn := entity.NewColumnFloatVector("vector", 1024, vectors)
@@ -60,6 +63,7 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 		idColumn,
 		contentColumn,
 		documentIDColumn,
+		documentNameColumn,
 		kbIDColumn,
 		indexColumn,
 		vectorColumn,
@@ -96,6 +100,11 @@ func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]mo
 			return nil, fmt.Errorf("unexpected type for document ID column")
 		}
 
+		docNameCol, ok := result.Fields.GetColumn("document_name").(*entity.ColumnVarChar)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for document Name column")
+		}
+
 		kbIDCol, ok := result.Fields.GetColumn("kb_id").(*entity.ColumnVarChar)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for KB ID column")
@@ -119,6 +128,11 @@ func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]mo
 				return nil, fmt.Errorf("获取文档ID失败: %w", err)
 			}
 
+			docName, err := docNameCol.GetAsString(i)
+			if err != nil {
+				return nil, fmt.Errorf("获取文档名称失败：%w", err)
+			}
+
 			kbID, err := kbIDCol.GetAsString(i)
 			if err != nil {
 				return nil, fmt.Errorf("获取知识库ID失败: %w", err)
@@ -129,12 +143,13 @@ func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]mo
 			score := result.Scores[i]
 
 			chunks = append(chunks, model.Chunk{
-				ID:         id,
-				Content:    content,
-				KBID:       kbID,
-				DocumentID: docID,
-				Index:      int(index),
-				Score:      score,
+				ID:           id,
+				Content:      content,
+				KBID:         kbID,
+				DocumentID:   docID,
+				DocumentName: docName,
+				Index:        int(index),
+				Score:        score,
 			})
 		}
 	}
@@ -161,7 +176,7 @@ func (m *milvusDao) Search(kbID string, vector []float32, topK int) ([]model.Chu
 		collectionName,
 		[]string{},
 		expr,
-		[]string{"id", "content", "document_id", "kb_id", "chunk_index"},
+		[]string{"id", "content", "document_id", "document_name", "kb_id", "chunk_index"},
 		[]entity.Vector{entity.FloatVector(vector)},
 		"vector",
 		entity.COSINE,
