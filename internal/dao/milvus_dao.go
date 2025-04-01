@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"log"
+	"sort"
 )
 
 type MilvusDao interface {
@@ -71,6 +73,13 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 
 func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]model.Chunk, error) {
 	var chunks []model.Chunk
+	log.Println("SearchResult长度：%v", len(searchResult))
+	for _, res := range searchResult {
+		log.Println("IDs: %s", res.IDs)
+		log.Println("Fields: %s", res.Fields)
+		log.Printf("Scores: %v", res.Scores)
+	}
+
 	for _, result := range searchResult {
 		idCol, ok := result.IDs.(*entity.ColumnVarChar)
 		if !ok {
@@ -117,15 +126,24 @@ func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]mo
 
 			index := indexCol.Data()[i]
 
+			score := result.Scores[i]
+
 			chunks = append(chunks, model.Chunk{
 				ID:         id,
 				Content:    content,
 				KBID:       kbID,
 				DocumentID: docID,
 				Index:      int(index),
+				Score:      score,
 			})
 		}
 	}
+
+	// 按Score从高到低排序
+	sort.Slice(chunks, func(i, j int) bool {
+		return chunks[i].Score > chunks[j].Score
+	})
+
 	return chunks, nil
 }
 
@@ -146,7 +164,7 @@ func (m *milvusDao) Search(kbID string, vector []float32, topK int) ([]model.Chu
 		[]string{"id", "content", "document_id", "kb_id", "chunk_index"},
 		[]entity.Vector{entity.FloatVector(vector)},
 		"vector",
-		entity.L2,
+		entity.COSINE,
 		topK,
 		sp,
 	)

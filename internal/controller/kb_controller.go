@@ -296,3 +296,30 @@ func (kc *KBController) ChatStream(ctx *gin.Context) {
 		ctx.Writer.Flush()
 	}
 }
+
+// ... existing code ...
+
+func (kc *KBController) GetKBDetail(ctx *gin.Context) {
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+
+	// 获取知识库ID
+	kbID := ctx.Query("kb_id")
+	if kbID == "" {
+		response.ParamError(ctx, errcode.ParamBindError, "知识库ID不能为空")
+		return
+	}
+
+	// 获取知识库详情
+	kb, err := kc.kbService.GetKBDetail(userID, kbID)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "获取知识库详情失败")
+		return
+	}
+
+	response.Success(ctx, kb)
+}

@@ -32,6 +32,7 @@ type KBService interface {
 	RAGQuery(userID uint, query string, kbIDs []string) (*model.ChatResponse, error)                                         // 新增RAG查询方法
 	RAGQueryStream(ctx context.Context, userID uint, query string, kbIDs []string) (<-chan *model.ChatStreamResponse, error) // 流式对话
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error)                                   // 获取知识库下的文件列表
+	GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error)                                                      // 获取知识库详情
 	// TODO: 移动Document到其他知识库
 	// TODO：修改知识库（名称、说明）
 }
@@ -438,4 +439,19 @@ func (ks *kbService) DocList(userID uint, kbID string, page int, size int) (int6
 	}
 
 	return total, docs, nil
+}
+
+func (ks *kbService) GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error) {
+	// 获取知识库信息
+	kb, err := ks.kbDao.GetKBByID(kbID)
+	if err != nil {
+		return nil, fmt.Errorf("获取知识库失败：%v", err)
+	}
+
+	// 验证权限
+	if kb.UserID != userID {
+		return nil, fmt.Errorf("无权限访问该知识库")
+	}
+
+	return kb, nil
 }

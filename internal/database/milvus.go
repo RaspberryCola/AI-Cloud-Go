@@ -87,7 +87,7 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 		}
 
 		// 创建索引
-		idx, err := entity.NewIndexIvfFlat(entity.L2, 128)
+		idx, err := entity.NewIndexIvfFlat(entity.COSINE, 128)
 		if err != nil {
 			return fmt.Errorf("创建索引失败: %w", err)
 		}

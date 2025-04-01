@@ -35,6 +35,7 @@ type Chunk struct {
 	DocumentID string    `json:"document_id"` // 文档ID
 	Index      int       `json:"index"`       // 第几个chunk
 	Embeddings []float32 `json:"embeddings"`  // chunk向量
+	Score      float32   `json:"score"`       // 返回分数信息
 }
 
 type AddFileRequest struct {
