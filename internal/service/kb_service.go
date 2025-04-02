@@ -5,6 +5,7 @@ import (
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
+	"os"
 
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
@@ -58,9 +59,9 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 	// embedder
 	dimesion := 1024
 	embedder, _ := openaiEmbed.NewEmbedder(ctx, &openaiEmbed.EmbeddingConfig{
-		APIKey:     "sk-98077dd2f6d74722ba818a4d52e6dee9",
-		Model:      "text-embedding-v3",
-		BaseURL:    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		APIKey:     os.Getenv("EMBEDDING_API_KEY"),
+		Model:      os.Getenv("EMBEDDING_MODEL"),
+		BaseURL:    os.Getenv("EMBEDDING_BASE_URL"),
 		Timeout:    30 * time.Second,
 		Dimensions: &dimesion,
 	})
@@ -70,9 +71,9 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 	maxTokens := 4096
 	var temp float32 = 0.7
 	llm, _ := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		BaseURL:     "https://ark.cn-beijing.volces.com/api/v3",
-		APIKey:      "8d58ce8d-bc3b-4d03-a090-d43da03040b2",
-		Model:       "deepseek-v3-250324",
+		BaseURL:     os.Getenv("LLM_BASE_URL"),
+		APIKey:      os.Getenv("LLM_API_KEY"),
+		Model:       os.Getenv("LLM_MODEL"),
 		MaxTokens:   &maxTokens,
 		Temperature: &temp,
 	})

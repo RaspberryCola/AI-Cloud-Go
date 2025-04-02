@@ -10,9 +10,17 @@ import (
 	"ai-cloud/internal/service"
 	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"log"
 )
 
 func main() {
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	config.InitConfig()
 
 	db, _ := database.InitDB()

@@ -297,8 +297,6 @@ func (kc *KBController) ChatStream(ctx *gin.Context) {
 	}
 }
 
-// ... existing code ...
-
 func (kc *KBController) GetKBDetail(ctx *gin.Context) {
 	// 获取用户ID并验证
 	userID, err := utils.GetUserIDFromContext(ctx)
