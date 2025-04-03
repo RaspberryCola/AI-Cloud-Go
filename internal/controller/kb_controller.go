@@ -54,21 +54,13 @@ func (kc *KBController) Delete(ctx *gin.Context) {
 		return
 	}
 
-	// 获取知识库ID
-	var req struct {
-		KBID string `json:"kb_id"`
-	}
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
-		return
-	}
+	kbID := ctx.Query("kb_id")
 
 	// 删除知识库
-	if err := kc.kbService.DeleteKB(userID, req.KBID); err != nil {
+	if err := kc.kbService.DeleteKB(userID, kbID); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return
 	}
-
 	response.SuccessWithMessage(ctx, "删除知识库成功", nil)
 }
 

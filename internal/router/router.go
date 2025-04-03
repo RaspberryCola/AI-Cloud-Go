@@ -34,15 +34,20 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 		kb := api.Group("knowledge")
 		kb.Use(middleware.JWTAuth())
 		{
+			// KB
 			kb.POST("/create", kc.Create)
-			kb.GET("/page", kc.PageList)
+			kb.DELETE("/delete", kc.Delete)
 			kb.POST("/add", kc.AddExistFile)
 			kb.POST("/addNew", kc.AddNewFile)
+			kb.GET("/page", kc.PageList)
+			kb.GET("/detail", kc.GetKBDetail)
+			// Doc
+			kb.GET("/docPage", kc.DocPage)
+			// RAG
 			kb.POST("/retrieve", kc.Retrieve)
 			kb.POST("/chat", kc.Chat)
 			kb.POST("/stream", kc.ChatStream)
-			kb.GET("/docPage", kc.DocPage)
-			kb.GET("/detail", kc.GetKBDetail)
+
 		}
 	}
 }

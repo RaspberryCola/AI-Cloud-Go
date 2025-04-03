@@ -32,8 +32,7 @@ func main() {
 	fileService := service.NewFileService(fileDao)
 	fileController := controller.NewFileController(fileService)
 
-	ctx := context.Background()
-	milvus, _ := database.InitMilvus(ctx)
+	milvus, _ := database.InitMilvus(context.Background())
 	milvusDao := dao.NewMilvusDao(milvus)
 
 	kbDao := dao.NewKnowledgeBaseDao(db)

@@ -8,11 +8,13 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"log"
 	"sort"
+	"strings"
 )
 
 type MilvusDao interface {
 	SaveChunks(chunks []model.Chunk) error
 	Search(kbID string, vector []float32, topK int) ([]model.Chunk, error)
+	DeleteChunks(docIDs []string) error
 }
 
 type milvusDao struct {
@@ -70,6 +72,21 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 	)
 	if err != nil {
 		return fmt.Errorf("插入数据失败: %w", err)
+	}
+
+	return nil
+}
+
+func (m *milvusDao) DeleteChunks(docIDs []string) error {
+	ctx := context.Background()
+	collectionName := "text_chunks"
+
+	// 构建删除表达式，使用 IN 操作符
+	expr := fmt.Sprintf("document_id in [\"%s\"]", strings.Join(docIDs, "\",\""))
+
+	err := m.mv.Delete(ctx, collectionName, "", expr)
+	if err != nil {
+		return fmt.Errorf("删除向量数据失败：%w", err)
 	}
 
 	return nil

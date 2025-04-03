@@ -5,6 +5,7 @@ import (
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
+	"ai-cloud/internal/utils"
 	"os"
 
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
@@ -24,16 +25,23 @@ import (
 )
 
 type KBService interface {
-	CreateDB(name, description string, userID uint) error                                                                    // 创建知识库
-	DeleteKB(userID uint, kbid string) error                                                                                 // 删除知识库
-	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error)                                          // 获取知识库列表
-	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)                                      // 添加File到知识库
-	ProcessDocument(doc *model.Document) error                                                                               // 解析嵌入文档（后续需要细化）
+	// 知识库
+	CreateDB(name, description string, userID uint) error                           // 创建知识库
+	DeleteKB(userID uint, kbid string) error                                        // 删除知识库
+	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error) // 获取知识库列表
+	GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error)             // 获取知识库详情
+
+	// 文档
+
+	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)    // 添加File到知识库
+	ProcessDocument(doc *model.Document) error                                             // 解析嵌入文档（后续需要细化）
+	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
+
+	// RAG
 	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)                                        // 获取检索的Chunks
 	RAGQuery(userID uint, query string, kbIDs []string) (*model.ChatResponse, error)                                         // 新增RAG查询方法
 	RAGQueryStream(ctx context.Context, userID uint, query string, kbIDs []string) (<-chan *model.ChatStreamResponse, error) // 流式对话
-	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error)                                   // 获取知识库下的文件列表
-	GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error)                                                      // 获取知识库详情
+
 	// TODO: 移动Document到其他知识库
 	// TODO：修改知识库（名称、说明）
 }
@@ -107,19 +115,65 @@ func (ks *kbService) CreateDB(name, description string, userID uint) error {
 	return nil
 }
 
-func (ks *kbService) DeleteKB(userID uint, kbid string) error {
-
-	kb, err := ks.kbDao.GetKBByID(kbid)
+func (ks *kbService) DeleteKB(userID uint, kbID string) error {
+	// 1. 获取知识库并验证权限
+	kb, err := ks.kbDao.GetKBByID(kbID)
 	if err != nil {
-		return errors.New("知识库不存在")
+		return fmt.Errorf("获取待删除的知识库失败: %w", err)
 	}
 	if kb.UserID != userID {
-		return errors.New("无删除权限")
+		return errors.New("无权限删除该知识库")
 	}
 
-	if err := ks.kbDao.DeleteKB(kbid); err != nil {
-		return errors.New("知识库删除失败")
+	// 2. 获取知识库下的所有文档
+	docs, err := ks.kbDao.GetAllDocsByKBID(kbID)
+	if err != nil {
+		return fmt.Errorf("获取知识库下的文档失败: %w", err)
 	}
+	// 3. 提取文档id
+	var docIDs []string
+	for _, doc := range docs {
+		docIDs = append(docIDs, doc.ID)
+	}
+
+	// 4. 开启事务
+	tx := ks.kbDao.GetDB().Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("开启事务失败：%w", tx.Error)
+	}
+
+	// 5.事务删除
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if len(docIDs) > 0 {
+		if err := ks.milvusDao.DeleteChunks(docIDs); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("删除向量数据失败: %w", err)
+		}
+	}
+
+	// 5.2 删除文档记录
+	if err := ks.kbDao.DeleteDocsByKBID(kbID); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 5.3 删除知识库记录
+	if err := ks.kbDao.DeleteKB(kbID); err != nil {
+		tx.Rollback()
+		return err
+	}
+	// 6. 提交事务
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("提交事务失败: %w", err)
+	}
+
 	return nil
 }
 
@@ -200,7 +254,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	for i, text := range texts {
 		textString := []string{text.Content}
 		vectors64, _ := ks.embedder.EmbedStrings(ctx, textString)
-		float32Vectors := ConvertFloat64ToFloat32Embeddings(vectors64)
+		float32Vectors := utils.ConvertFloat64ToFloat32Embeddings(vectors64)
 		chunk := model.Chunk{
 			ID:           GenerateUUID(),
 			Content:      text.Content,
@@ -228,18 +282,6 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	return nil
 }
 
-func ConvertFloat64ToFloat32Embeddings(embeddings [][]float64) [][]float32 {
-	float32Embeddings := make([][]float32, len(embeddings))
-	for i, vec64 := range embeddings {
-		vec32 := make([]float32, len(vec64))
-		for j, v := range vec64 {
-			vec32[j] = float32(v)
-		}
-		float32Embeddings[i] = vec32
-	}
-	return float32Embeddings
-}
-
 func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error) {
 
 	ctx := context.Background()
@@ -262,7 +304,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 	}
 
 	// 3. Milvus向量检索
-	float32Vector := ConvertFloat64ToFloat32Embeddings(embeddings)[0]
+	float32Vector := utils.ConvertFloat64ToFloat32Embeddings(embeddings)[0]
 
 	return ks.milvusDao.Search(kbID, float32Vector, topK)
 }
@@ -336,7 +378,7 @@ func (ks *kbService) RAGQueryStream(ctx context.Context, userID uint, query stri
 	// 2. 从每个知识库检索相关内容
 	var allChunks []model.Chunk
 	for _, kbID := range kbIDs {
-		chunks, err := ks.Retrieve(userID, kbID, query, 3)
+		chunks, err := ks.Retrieve(userID, kbID, query, 5)
 		if err != nil {
 			return nil, err
 		}
@@ -349,8 +391,8 @@ func (ks *kbService) RAGQueryStream(ctx context.Context, userID uint, query stri
 		context += chunk.Content + "\n"
 	}
 
-	systemPrompt := "你是一个知识库助手。请基于以下参考内容回答用户问题。如果无法从参考内容中得到答案，请明确告知。\n参考内容:\n" + context
-
+	systemPrompt := "你是一个有用的助手，你可以获取外部知识来回答用户问题，以下是可利用的知识内容。\n外部知识库内容:\n" + context
+	query = "用户提问：" + query
 	messages := []*schema.Message{
 		schema.SystemMessage(systemPrompt),
 		schema.UserMessage(query),
