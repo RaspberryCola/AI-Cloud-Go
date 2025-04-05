@@ -29,7 +29,10 @@ storage:
     use_ssl: false
     region: ""
 
-# 新增 CORS 配置
+rag:
+  chunk_size: 1500
+  overlap_size: 500
+
 cors:
   allow_origins:
     - "*"
@@ -48,4 +51,4 @@ cors:
   expose_headers:
     - "Content-Length"
   allow_credentials: true
-  max_age: "12h" # 12 小时
+  max_age: "12h"

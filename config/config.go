@@ -59,12 +59,18 @@ type CORSConfig struct {
 	MaxAge           string   `mapstructure:"max_age"` // 使用字符串表示时间，便于配置
 }
 
+type RAGConfig struct {
+	ChunkSize   int `mapstructure:"chunk_size"`
+	OverlapSize int `mapstructure:"overlap_size"`
+}
+
 type AppConfig struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Storage  StorageConfig  `mapstructure:"storage"`
 	CORS     CORSConfig     `mapstructure:"cors"`
+	RAG      RAGConfig      `mapstructure:"rag"`
 }
 
 var AppConfigInstance *AppConfig

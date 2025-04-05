@@ -61,7 +61,7 @@ func (kd *kbDao) CountKBs(userID uint) (int64, error) {
 }
 func (kd *kbDao) ListKBs(userID uint, page int, pageSize int) ([]model.KnowledgeBase, error) {
 	var kbs []model.KnowledgeBase
-	query := kd.db.Where("user_id = ?", userID).Order("created_at asc")
+	query := kd.db.Where("user_id = ?", userID).Order("created_at desc")
 
 	offset := (page - 1) * pageSize
 	query = query.Offset(offset).Limit(pageSize)

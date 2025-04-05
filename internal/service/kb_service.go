@@ -219,6 +219,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	}
 
 	fURL, _ := ks.storageDriver.GetURL(f.StorageKey)
+	fmt.Println("fURL: ", fURL)
 
 	// 2. Loader 加载文档，获取schema.Document
 	loader, err := url.NewLoader(ctx, nil)
