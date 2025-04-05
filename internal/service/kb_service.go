@@ -7,6 +7,8 @@ import (
 	"ai-cloud/internal/storage"
 	"ai-cloud/internal/utils"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
@@ -22,6 +24,7 @@ import (
 	openaiEmbed "github.com/cloudwego/eino-ext/components/embedding/openai"
 
 	"github.com/cloudwego/eino/components/document"
+	"github.com/cloudwego/eino/components/document/parser"
 )
 
 type KBService interface {
@@ -221,12 +224,26 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	fURL, _ := ks.storageDriver.GetURL(f.StorageKey)
 	fmt.Println("fURL: ", fURL)
 
+	ext := strings.ToLower(filepath.Ext(f.Name))
+
 	// 2. Loader 加载文档，获取schema.Document
-	loader, err := url.NewLoader(ctx, nil)
+	var p parser.Parser
+	switch ext {
+	case ".pdf":
+		p, err = utils.NewCustomPdfParser(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("获取pdfparser失败：%v", err)
+		}
+	default:
+		p = nil
+	}
+
+	l, err := url.NewLoader(ctx, &url.LoaderConfig{Parser: p})
+
 	if err != nil {
 		return fmt.Errorf("创建Loader失败: %w", err)
 	}
-	docs, err := loader.Load(ctx, document.Source{
+	docs, err := l.Load(ctx, document.Source{
 		URI: fURL,
 	})
 	if err != nil {
