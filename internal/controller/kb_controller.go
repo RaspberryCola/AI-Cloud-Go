@@ -315,3 +315,33 @@ func (kc *KBController) GetKBDetail(ctx *gin.Context) {
 
 	response.Success(ctx, kb)
 }
+
+func (kc *KBController) DeleteDocs(ctx *gin.Context) {
+
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "获取用户失败")
+		return
+	}
+
+	req := model.BatchDeleteDocsReq{}
+
+	if err = ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
+		return
+	}
+
+	docIDs := req.DocIDs
+
+	if len(docIDs) == 0 {
+		response.SuccessWithMessage(ctx, "删除知识库成功", nil)
+		return
+	}
+
+	if err := kc.kbService.DeleteDocs(userID, docIDs); err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "删除文档失败")
+		return
+	}
+	response.SuccessWithMessage(ctx, "删除知识库成功", nil)
+}

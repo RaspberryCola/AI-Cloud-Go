@@ -30,7 +30,7 @@ import (
 type KBService interface {
 	// 知识库
 	CreateDB(name, description string, userID uint) error                           // 创建知识库
-	DeleteKB(userID uint, kbid string) error                                        // 删除知识库
+	DeleteKB(userID uint, kbID string) error                                        // 删除知识库
 	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error) // 获取知识库列表
 	GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error)             // 获取知识库详情
 
@@ -39,6 +39,7 @@ type KBService interface {
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)    // 添加File到知识库
 	ProcessDocument(doc *model.Document) error                                             // 解析嵌入文档（后续需要细化）
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
+	DeleteDocs(userID uint, docs []string) error                                           // 批量删除文件
 
 	// RAG
 	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)                                        // 获取检索的Chunks
@@ -146,7 +147,6 @@ func (ks *kbService) DeleteKB(userID uint, kbID string) error {
 	}
 
 	// 5.事务删除
-
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -257,8 +257,8 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	var chunks []model.Chunk
 
 	splitter, err := recursive.NewSplitter(ctx, &recursive.Config{
-		ChunkSize:   500,
-		OverlapSize: 300,
+		ChunkSize:   config.AppConfigInstance.RAG.ChunkSize,
+		OverlapSize: config.AppConfigInstance.RAG.OverlapSize,
 	})
 	if err != nil {
 		return fmt.Errorf("加载分块器失败: %w", err)
@@ -516,4 +516,36 @@ func (ks *kbService) GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase
 	}
 
 	return kb, nil
+}
+
+func (ks *kbService) DeleteDocs(userID uint, docIDs []string) error {
+	// 开启事务
+	tx := ks.kbDao.GetDB().Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("开启事务失败：%w", tx.Error)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if len(docIDs) > 0 {
+		if err := ks.milvusDao.DeleteChunks(docIDs); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("删除向量数据失败：%w", err)
+		}
+	}
+
+	if err := ks.kbDao.BatchDeleteDocs(userID, docIDs); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("批量删除Doc失败：%w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("提交事务失败：%w", err)
+	}
+	return nil
 }

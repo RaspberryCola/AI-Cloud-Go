@@ -22,6 +22,7 @@ type KnowledgeBaseDao interface {
 	ListDocs(id string, page int, size int) ([]model.Document, error) // 获取文档列表
 	GetAllDocsByKBID(kbID string) ([]model.Document, error)           // 获取知识库下所有文档
 	DeleteDocsByKBID(kbID string) error                               // 删除知识库下所有文档
+	BatchDeleteDocs(userID uint, docIDs []string) error               // 批量删除文档
 }
 
 type kbDao struct {
@@ -117,6 +118,21 @@ func (kd *kbDao) GetAllDocsByKBID(kbID string) ([]model.Document, error) {
 func (kd *kbDao) DeleteDocsByKBID(kbID string) error {
 	if err := kd.db.Where("knowledge_base_id = ?", kbID).Delete(&model.Document{}).Error; err != nil {
 		return fmt.Errorf("删除文档失败: %w", err)
+	}
+	return nil
+}
+
+func (kd *kbDao) BatchDeleteDocs(userID uint, docIDs []string) error {
+	if len(docIDs) == 0 {
+		return nil
+	}
+	res := kd.db.Where("id IN (?) AND user_id = ?", docIDs, userID).Delete(&model.Document{})
+	if res.Error != nil {
+		return fmt.Errorf("db删除错误：%w", res.Error)
+	}
+
+	if res.RowsAffected != int64(len(docIDs)) {
+		return fmt.Errorf("expected to delete %d records, but deleted %d", len(docIDs), res.RowsAffected)
 	}
 	return nil
 }

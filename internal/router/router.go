@@ -43,6 +43,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			kb.GET("/detail", kc.GetKBDetail)
 			// Doc
 			kb.GET("/docPage", kc.DocPage)
+			kb.POST("/docDelete", kc.DeleteDocs)
 			// RAG
 			kb.POST("/retrieve", kc.Retrieve)
 			kb.POST("/chat", kc.Chat)
