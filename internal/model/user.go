@@ -16,7 +16,7 @@ type User struct {
 
 type UserRegisterReq struct {
 	Username string `json:"username" binding:"required,min=3,max=20"`
-	Password string `json:"password" binding:"required,min=8,max=30"`
+	Password string `json:"password" binding:"required,min=6,max=30"`
 	Email    string `json:"email" binding:"required,email"`
 	Phone    string `json:"phone" binding:"required,e164"`
 }

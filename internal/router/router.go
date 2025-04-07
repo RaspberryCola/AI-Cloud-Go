@@ -29,7 +29,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			auth.GET("/search", fc.Search)
 			auth.PUT("/rename", fc.Rename)
 			auth.GET("/path", fc.GetPath)
-			auth.GET("/id-path", fc.GetIDPath)
+			auth.GET("/idPath", fc.GetIDPath)
 		}
 		kb := api.Group("knowledge")
 		kb.Use(middleware.JWTAuth())
