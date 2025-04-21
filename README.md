@@ -69,3 +69,9 @@ go mod download
 ```bash
 go run cmd/main.go
 ```
+
+## 开发计划
+- [ ] 消息队列：处理文件上传、文档解析；
+- [ ] 支持自定义LLM和Embedding模型；
+- [ ] Agent模块；
+
