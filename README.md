@@ -72,6 +72,8 @@ go run cmd/main.go
 
 # AI-Cloud-Go Docker 完整环境配置
 
+> 更多详情请看 [docs 文件夹](/docs/)
+
 ## 前置条件
 - 已安装 Docker 和 Docker Compose
 - 基本了解 Docker 的使用
