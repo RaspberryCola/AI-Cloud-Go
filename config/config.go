@@ -11,6 +11,9 @@ var AppConfigInstance *AppConfig
 
 // InitConfig 初始化配置
 func InitConfig() {
+	// 初始化 AppConfigInstance
+	AppConfigInstance = &AppConfig{}
+
 	// 加载配置
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")

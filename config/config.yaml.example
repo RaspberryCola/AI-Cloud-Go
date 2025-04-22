@@ -9,7 +9,7 @@ database:
   name: "ai_cloud"
 
 jwt:
-  secret: "wyb010607"
+  secret: "your-secret-key-here"
   expiration_hours: 24
 
 storage:

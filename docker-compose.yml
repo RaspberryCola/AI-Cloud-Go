@@ -2,16 +2,19 @@ version: '3'
 
 services:
   # MySQL service - create ai_cloud database
-  mysql-init:
+  mysql:
     image: mysql:8.0
-    command: --init-file /data/application/init.sql
+    ports:
+      - "3306:3306"
     volumes:
-      - ./init.sql:/data/application/init.sql
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
       MYSQL_ROOT_PASSWORD: 123456
+      MYSQL_DATABASE: ai_cloud
     networks:
       - ai-cloud-network
-    restart: on-failure
+    restart: always
 
   # MinIO service
   minio:
@@ -111,6 +114,7 @@ services:
       - ai-cloud-network
 
 volumes:
+  mysql_data:
   minio_data:
   etcd_data:
   minio_data_for_milvus:

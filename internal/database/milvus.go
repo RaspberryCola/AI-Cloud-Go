@@ -31,12 +31,16 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 	}
 
 	if exists {
-		// 如果集合已存在，先删除它
-		if err := milvusClinet.DropCollection(ctx, collectionName); err != nil {
-			return fmt.Errorf("删除现有集合失败: %w", err)
-		}
-		fmt.Println("已删除现有的text_chunks集合，将重新创建")
+		return nil
 	}
+
+	//if exists {
+	//	// 如果集合已存在，先删除它
+	//	if err := milvusClinet.DropCollection(ctx, collectionName); err != nil {
+	//		return fmt.Errorf("删除现有集合失败: %w", err)
+	//	}
+	//	fmt.Println("已删除现有的text_chunks集合，将重新创建")
+	//}
 
 	// 创建集合
 	schema := &entity.Schema{
