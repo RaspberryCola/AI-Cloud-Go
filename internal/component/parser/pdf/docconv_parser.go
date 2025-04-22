@@ -1,11 +1,17 @@
-package utils
+/*
+基于 docconv 库的 pdf 解析器；
+实现了Eino 组件接口的 Parse 方法。
+*/
+
+package pdf
 
 import (
 	"context"
 	"fmt"
+	"io"
+
 	"github.com/cloudwego/eino/components/document/parser"
 	"github.com/cloudwego/eino/schema"
-	"io"
 
 	"code.sajari.com/docconv/v2"
 )
@@ -25,18 +31,18 @@ func WithToPages(toPages bool) parser.Option {
 type Config struct {
 	ToPages bool
 }
-type CustomPdfParser struct {
+type DocconvPDFParser struct {
 	ToPages bool
 }
 
-func NewCustomPdfParser(ctx context.Context, config *Config) (*CustomPdfParser, error) {
+func NewDocconvPDFParser(ctx context.Context, config *Config) (*DocconvPDFParser, error) {
 	if config == nil {
 		config = &Config{}
 	}
-	return &CustomPdfParser{ToPages: config.ToPages}, nil
+	return &DocconvPDFParser{ToPages: config.ToPages}, nil
 }
 
-func (pp *CustomPdfParser) Parse(ctx context.Context, reader io.Reader, opts ...parser.Option) ([]*schema.Document, error) {
+func (pp *DocconvPDFParser) Parse(ctx context.Context, reader io.Reader, opts ...parser.Option) ([]*schema.Document, error) {
 	// 1. 处理通用选项
 	commonOpts := parser.GetCommonOptions(nil, opts...)
 
