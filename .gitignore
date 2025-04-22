@@ -1,0 +1,107 @@
+# 编译生成的二进制文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+
+# 测试文件
+*.test
+*.out
+coverage.txt
+
+# Go 专用
+*.o
+*.a
+*.so
+_obj
+_test
+*.[568vq]
+[568vq].out
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+_testmain.go
+go.work
+
+# 依赖管理
+vendor/
+Godeps/
+go-build
+
+# 日志和临时文件
+logs/
+*.log
+tmp/
+temp/
+
+# 特定 IDE 和编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 环境和配置文件（注意不要排除 config 目录）
+.env
+.envrc
+env.sh
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 实际的配置文件（不排除示例文件）
+config.yaml
+config.yml
+config.json
+config.toml
+config.ini
+config.hcl
+config.props
+config.properties
+config/config.yaml
+config/config.yml
+config/config.json
+config/config.toml
+
+# 明确说明不排除 config 目录和示例文件
+!config/
+!*.example
+!*.example.*
+!*.sample
+!*.sample.*
+!*.template
+!*.template.*
+
+# 敏感信息和凭证
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.der
+*.csr
+*.cer
+*.keystore
+*.jks
+*.p7b
+*.p7c
+*.secret
+*.password
+*.credentials
+*secret*
+*password*
+*credential*
+*token*
+*apikey*
+*api_key*
+
+# 其他可能的敏感文件
+*.bak
+*.backup
+

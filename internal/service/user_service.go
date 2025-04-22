@@ -53,7 +53,7 @@ func (s *userService) Register(user *model.User) error {
 	}
 	err = s.userDao.CreateUser(newUser)
 	if err != nil {
-		return errors.New("注册失败")
+		return err
 	}
 	return nil
 }

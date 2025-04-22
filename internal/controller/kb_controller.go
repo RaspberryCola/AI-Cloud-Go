@@ -8,6 +8,8 @@ import (
 	"ai-cloud/pkgs/response"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -162,6 +164,13 @@ func (kc *KBController) AddNewFile(ctx *gin.Context) {
 		response.ParamError(ctx, errcode.ParamBindError, "文件上传失败")
 		return
 	}
+
+	// 检查文件大小
+	if fileHeader.Size > 20*1024*1024 { // 20MB限制
+		response.ParamError(ctx, errcode.ParamBindError, "文件大小不能超过20MB")
+		return
+	}
+
 	file, err := fileHeader.Open()
 	if err != nil {
 		response.ParamError(ctx, errcode.ParamBindError, "文件打开失败")
@@ -186,6 +195,19 @@ func (kc *KBController) AddNewFile(ctx *gin.Context) {
 		response.InternalError(ctx, errcode.InternalServerError, "获取文件信息失败")
 		return
 	}
+
+	// 文档名称长度检查
+	if len(f.Name) > 200 {
+		// 截断文件名
+		nameBase := filepath.Base(f.Name)
+		nameExt := filepath.Ext(nameBase)
+		nameWithoutExt := strings.TrimSuffix(nameBase, nameExt)
+		if len(nameWithoutExt) > 195 {
+			nameWithoutExt = nameWithoutExt[:195]
+		}
+		f.Name = nameWithoutExt + nameExt
+	}
+
 	doc, err := kc.kbService.CreateDocument(userID, kbID, f)
 	if err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "添加文件到知识库失败")
@@ -194,7 +216,7 @@ func (kc *KBController) AddNewFile(ctx *gin.Context) {
 
 	doc.Status = 1 // 正在处理文档
 	if err = kc.kbService.ProcessDocument(doc); err != nil {
-		response.InternalError(ctx, errcode.InternalServerError, err.Error())
+		response.InternalError(ctx, errcode.InternalServerError, "处理文档失败: "+err.Error())
 		return
 	}
 	response.SuccessWithMessage(ctx, "添加文件到知识库成功", nil)

@@ -9,6 +9,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 )
 
 type MilvusDao interface {
@@ -29,6 +30,12 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 	ctx := context.Background()
 	collectionName := "text_chunks"
 
+	// 添加日志，检查传入的chunks数量
+	fmt.Printf("SaveChunks: 准备插入%d个文本块\n", len(chunks))
+	if len(chunks) == 0 {
+		return fmt.Errorf("num_rows should be greater than 0: invalid parameter[expected=invalid num_rows][actual=0")
+	}
+
 	// 准备插入数据
 	var ids []string
 	var contents []string
@@ -38,14 +45,35 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 	var chunkIndices []int32
 	var vectors [][]float32
 
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
+		// 验证chunk数据
+		if len(chunk.Content) == 0 {
+			fmt.Printf("警告: 第%d个文本块内容为空，跳过\n", i)
+			continue
+		}
+		if len(chunk.Embeddings) == 0 {
+			fmt.Printf("警告: 第%d个文本块向量为空，跳过\n", i)
+			continue
+		}
+
+		// 确保文档名不超过限制长度
+		docName := chunk.DocumentName
+		if len(docName) > 250 {
+			docName = docName[:250]
+		}
+
 		ids = append(ids, chunk.ID)
 		contents = append(contents, chunk.Content)
 		documentIDs = append(documentIDs, chunk.DocumentID)
-		documentNames = append(documentNames, chunk.DocumentName)
+		documentNames = append(documentNames, docName)
 		kbIDs = append(kbIDs, chunk.KBID)
 		chunkIndices = append(chunkIndices, int32(chunk.Index))
 		vectors = append(vectors, chunk.Embeddings)
+	}
+
+	// 重新检查，确保有数据要插入
+	if len(ids) == 0 {
+		return fmt.Errorf("过滤无效数据后，没有有效的文本块可以插入")
 	}
 
 	// 创建插入的数据列
@@ -57,24 +85,33 @@ func (m *milvusDao) SaveChunks(chunks []model.Chunk) error {
 	indexColumn := entity.NewColumnInt32("chunk_index", chunkIndices)
 	vectorColumn := entity.NewColumnFloatVector("vector", 1024, vectors)
 
-	// 插入数据
-	_, err := m.mv.Insert(
-		ctx,
-		collectionName,
-		"",
-		idColumn,
-		contentColumn,
-		documentIDColumn,
-		documentNameColumn,
-		kbIDColumn,
-		indexColumn,
-		vectorColumn,
-	)
-	if err != nil {
-		return fmt.Errorf("插入数据失败: %w", err)
+	// 插入数据，最多重试3次
+	var lastErr error
+	for i := 0; i < 3; i++ {
+		fmt.Printf("尝试插入数据到Milvus (%d/3)...\n", i+1)
+		_, err := m.mv.Insert(
+			ctx,
+			collectionName,
+			"",
+			idColumn,
+			contentColumn,
+			documentIDColumn,
+			documentNameColumn,
+			kbIDColumn,
+			indexColumn,
+			vectorColumn,
+		)
+		if err == nil {
+			fmt.Printf("成功插入%d条数据到Milvus\n", len(ids))
+			return nil
+		}
+
+		lastErr = err
+		fmt.Printf("插入失败 (%d/3): %v\n", i+1, err)
+		time.Sleep(1 * time.Second) // 等待1秒后重试
 	}
 
-	return nil
+	return fmt.Errorf("插入数据失败，已重试3次: %w", lastErr)
 }
 
 func (m *milvusDao) DeleteChunks(docIDs []string) error {
