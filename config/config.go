@@ -23,7 +23,7 @@ func InitConfig() {
 	// 监听配置变化
 	viper.WatchConfig()
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		if err := viper.Unmarshal(&AppConfigInstance); err != nil {
+		if err := viper.Unmarshal(AppConfigInstance); err != nil {
 			log.Printf("loadConfig failed, unmarshal config err: %v", err)
 		}
 	})
