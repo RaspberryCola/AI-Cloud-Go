@@ -2,6 +2,7 @@ package service
 
 import (
 	"ai-cloud/config"
+	"ai-cloud/internal/component/parser/pdf"
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
@@ -237,7 +238,8 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	var p parser.Parser
 	switch ext {
 	case ".pdf":
-		p, err = utils.NewCustomPdfParser(ctx, nil)
+		p, err = pdf.NewDocconvPDFParser(ctx, nil)
+		//p, err = utils.NewCustomPdfParser(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("获取pdfparser失败：%v", err)
 		}
