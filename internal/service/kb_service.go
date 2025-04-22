@@ -6,22 +6,20 @@ import (
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
 	"ai-cloud/internal/utils"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/schema"
-
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"time"
-
-	openaiEmbed "github.com/cloudwego/eino-ext/components/embedding/openai"
 
 	"github.com/cloudwego/eino/components/document"
 	"github.com/cloudwego/eino/components/document/parser"
@@ -51,12 +49,12 @@ type KBService interface {
 }
 
 type kbService struct {
-	kbDao         dao.KnowledgeBaseDao
-	milvusDao     dao.MilvusDao
-	fileService   FileService
-	storageDriver storage.Driver
-	embedder      *openaiEmbed.Embedder
-	llm           *openai.ChatModel
+	kbDao            dao.KnowledgeBaseDao
+	milvusDao        dao.MilvusDao
+	fileService      FileService
+	storageDriver    storage.Driver
+	embeddingService EmbeddingService // 使用新的嵌入服务接口
+	llm              *openai.ChatModel
 }
 
 func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileService FileService) KBService {
@@ -68,37 +66,45 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 		panic("无法连接到存储服务: " + err.Error())
 	}
 
-	// embedder
-	dimesion := 1024
-	embedder, _ := openaiEmbed.NewEmbedder(ctx, &openaiEmbed.EmbeddingConfig{
-		APIKey:     os.Getenv("EMBEDDING_API_KEY"),
-		Model:      os.Getenv("EMBEDDING_MODEL"),
-		BaseURL:    os.Getenv("EMBEDDING_BASE_URL"),
-		Timeout:    30 * time.Second,
-		Dimensions: &dimesion,
-	})
+	// 使用工厂函数创建合适的嵌入服务
+	embeddingService, err := NewEmbeddingService(ctx)
+	if err != nil {
+		panic("无法创建嵌入服务: " + err.Error())
+	}
 
-	// llm
+	// 从配置文件获取LLM配置
+	llmCfg := config.GetConfig().LLM
+	maxTokens := llmCfg.MaxTokens
+	temp := llmCfg.Temperature
+
 	// 初始化LLM
-	maxTokens := 4096
-	var temp float32 = 0.7
 	llm, _ := openai.NewChatModel(ctx, &openai.ChatModelConfig{
-		BaseURL:     os.Getenv("LLM_BASE_URL"),
-		APIKey:      os.Getenv("LLM_API_KEY"),
-		Model:       os.Getenv("LLM_MODEL"),
+		BaseURL:     llmCfg.BaseURL,
+		APIKey:      llmCfg.APIKey,
+		Model:       llmCfg.Model,
 		MaxTokens:   &maxTokens,
 		Temperature: &temp,
 	})
 
 	return &kbService{
-		kbDao:         kbDao,
-		milvusDao:     milvusDao,
-		fileService:   fileService,
-		storageDriver: driver,
-		embedder:      embedder,
-		llm:           llm,
+		kbDao:            kbDao,
+		milvusDao:        milvusDao,
+		fileService:      fileService,
+		storageDriver:    driver,
+		embeddingService: embeddingService,
+		llm:              llm,
 	}
 }
+
+// getEnvWithDefault 获取环境变量，如果不存在则返回默认值
+func getEnvWithDefault(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
 func (ks *kbService) CreateDB(name, description string, userID uint) error {
 	if name == "" {
 		return errors.New("知识库名称不能为空")
@@ -222,9 +228,10 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	}
 
 	fURL, _ := ks.storageDriver.GetURL(f.StorageKey)
-	fmt.Println("fURL: ", fURL)
+	fmt.Println("处理文档:", f.Name, "URL:", fURL)
 
 	ext := strings.ToLower(filepath.Ext(f.Name))
+	fmt.Println("文件扩展名:", ext)
 
 	// 2. Loader 加载文档，获取schema.Document
 	var p parser.Parser
@@ -235,6 +242,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 			return fmt.Errorf("获取pdfparser失败：%v", err)
 		}
 	default:
+		fmt.Println("未找到适合扩展名的解析器:", ext)
 		p = nil
 	}
 
@@ -249,6 +257,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	if err != nil {
 		return fmt.Errorf("加载文档失败: %w", err)
 	}
+	fmt.Printf("文档加载成功，共%d个文档部分\n", len(docs))
 	for _, d := range docs {
 		d.ID = f.Name
 	}
@@ -268,11 +277,34 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	if err != nil {
 		return fmt.Errorf("分块失败: %w", err)
 	}
+	fmt.Printf("文本分块成功，共%d个文本块\n", len(texts))
+
+	if len(texts) == 0 {
+		return fmt.Errorf("文档解析未生成有效文本块，请检查文档内容或格式")
+	}
 
 	for i, text := range texts {
 		textString := []string{text.Content}
-		vectors64, _ := ks.embedder.EmbedStrings(ctx, textString)
+		fmt.Printf("处理第%d个文本块，长度: %d字符\n", i+1, len(text.Content))
+
+		if len(text.Content) < 10 {
+			fmt.Printf("文本块内容过短，跳过: '%s'\n", text.Content)
+			continue
+		}
+
+		// 使用抽象的嵌入服务接口进行向量化
+		vectors64, err := ks.embeddingService.EmbedStrings(ctx, textString)
+		if err != nil {
+			fmt.Printf("向量化失败: %v\n", err)
+			return fmt.Errorf("文本向量化失败: %w", err)
+		}
+
 		float32Vectors := utils.ConvertFloat64ToFloat32Embeddings(vectors64)
+		if len(float32Vectors) == 0 {
+			fmt.Printf("获取到空的embedding向量，跳过该文本块\n")
+			continue
+		}
+
 		chunk := model.Chunk{
 			ID:           GenerateUUID(),
 			Content:      text.Content,
@@ -283,6 +315,11 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 			Embeddings:   float32Vectors[0],
 		}
 		chunks = append(chunks, chunk)
+	}
+
+	fmt.Printf("成功生成%d个向量化的文本块\n", len(chunks))
+	if len(chunks) == 0 {
+		return fmt.Errorf("未能生成任何有效的向量化文本块，请检查文本内容或向量化服务")
 	}
 
 	// 4. 将 chunks 存储到 Milvus
@@ -301,7 +338,6 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 }
 
 func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error) {
-
 	ctx := context.Background()
 
 	// 1. 权限校验
@@ -315,16 +351,24 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 
 	queryList := []string{query}
 
-	// 2. 向量化query
-	embeddings, err := ks.embedder.EmbedStrings(ctx, queryList)
+	// 2. 向量化query，使用抽象的嵌入服务接口
+	embeddings, err := ks.embeddingService.EmbedStrings(ctx, queryList)
 	if err != nil {
 		return nil, fmt.Errorf("查询向量化失败: %w", err)
 	}
 
-	// 3. Milvus向量检索
-	float32Vector := utils.ConvertFloat64ToFloat32Embeddings(embeddings)[0]
+	// 检查返回的向量数组是否为空
+	if len(embeddings) == 0 {
+		return nil, fmt.Errorf("获取到空的embedding向量数组，查询文本: %s", query)
+	}
 
-	return ks.milvusDao.Search(kbID, float32Vector, topK)
+	// 3. Milvus向量检索
+	float32Vectors := utils.ConvertFloat64ToFloat32Embeddings(embeddings)
+	if len(float32Vectors) == 0 {
+		return nil, fmt.Errorf("转换后获取到空的float32向量数组，查询文本: %s", query)
+	}
+
+	return ks.milvusDao.Search(kbID, float32Vectors[0], topK)
 }
 
 // RAGQuery 实现RAG查询
@@ -415,6 +459,8 @@ func (ks *kbService) RAGQueryStream(ctx context.Context, userID uint, query stri
 		schema.SystemMessage(systemPrompt),
 		schema.UserMessage(query),
 	}
+
+	log.Printf("messages: %v", messages)
 
 	// 4. 启动goroutine处理流式响应
 	go func() {

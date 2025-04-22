@@ -1,0 +1,77 @@
+server:
+  port: "8080"
+
+database:
+  host: "localhost"
+  port: "3306"
+  user: "root"
+  password: "123456"
+  name: "ai_cloud"
+
+jwt:
+  secret: "wyb010607"
+  expiration_hours: 24
+
+storage:
+  type: "minio" # local, oss, minio
+  local:
+    base_dir: "./storage_data"
+  oss:
+    endpoint: "oss-cn-nanjing.aliyuncs.com"
+    bucket: "smkl-obsidian"
+    access_key_id: ""
+    access_key_secret: ""
+  minio:
+    endpoint: "localhost:9000"
+    bucket: "ai-cloud"
+    access_key_id: "minioadmin"
+    access_key_secret: "minioadmin"
+    use_ssl: false
+    region: ""
+
+rag:
+  chunk_size: 1500
+  overlap_size: 500
+
+cors:
+  allow_origins:
+    - "*"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "PATCH"
+    - "DELETE"
+    - "OPTIONS"
+  allow_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Accept"
+    - "Authorization"
+  expose_headers:
+    - "Content-Length"
+  allow_credentials: true
+  max_age: "12h"
+
+# 嵌入模型配置
+embedding:
+  service: "ollama" # remote 或 ollama
+
+  # 远程嵌入模型配置（OpenAI API，当 service=remote 时使用）
+  remote:
+    api_key: "sk-example-embedding-key"
+    model: "text-embedding-3-large"
+    base_url: "https://api.openai.com/v1"
+
+  # Ollama嵌入模型配置（当 service=ollama 时使用）
+  ollama:
+    url: "http://localhost:11434"
+    model: "mxbai-embed-large"
+
+# 语言模型配置
+llm:
+  api_key: "your-key"
+  model: "deepseek-chat"
+  base_url: "https://api.deepseek.com/v1"
+  max_tokens: 10240
+  temperature: 0.7

@@ -20,12 +20,12 @@ func (c *UserController) Register(ctx *gin.Context) {
 	var req model.User
 
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.ParamError(ctx, errcode.ParamBindError, "用户注册参数错误")
+		response.ParamError(ctx, errcode.ParamBindError, "用户注册参数错误: "+err.Error())
 		return
 	}
 
 	if err := c.userService.Register(&req); err != nil {
-		response.InternalError(ctx, errcode.InternalServerError, "注册失败")
+		response.InternalError(ctx, errcode.InternalServerError, "注册失败: "+err.Error())
 		return
 	}
 
