@@ -81,15 +81,17 @@ type EmbeddingConfig struct {
 
 // RemoteEmbeddingConfig 远程嵌入模型配置
 type RemoteEmbeddingConfig struct {
-	APIKey  string `mapstructure:"api_key"`
-	Model   string `mapstructure:"model"`
-	BaseURL string `mapstructure:"base_url"`
+	APIKey    string `mapstructure:"api_key"`
+	Model     string `mapstructure:"model"`
+	BaseURL   string `mapstructure:"base_url"`
+	Dimension int    `mapstructure:"dimension"`
 }
 
 // OllamaEmbeddingConfig Ollama嵌入模型配置
 type OllamaEmbeddingConfig struct {
-	URL   string `mapstructure:"url"`
-	Model string `mapstructure:"model"`
+	URL       string `mapstructure:"url"`
+	Model     string `mapstructure:"model"`
+	Dimension int    `mapstructure:"dimension"`
 }
 
 // LLMConfig 语言模型配置

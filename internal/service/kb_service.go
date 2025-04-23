@@ -19,11 +19,11 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/document/loader/url"
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
+	//"github.com/cloudwego/eino-ext/components/embedding"
 	"github.com/cloudwego/eino-ext/components/model/openai"
-	"github.com/cloudwego/eino/schema"
-
 	"github.com/cloudwego/eino/components/document"
 	"github.com/cloudwego/eino/components/document/parser"
+	"github.com/cloudwego/eino/schema"
 )
 
 type KBService interface {
@@ -399,12 +399,12 @@ func (ks *kbService) RAGQuery(userID uint, query string, kbIDs []string) (*model
 		allChunks = append(allChunks, chunks...)
 	}
 	// 3. 构建提示词
-	var context string
+	var content string
 	for _, chunk := range allChunks {
-		context += chunk.Content + "\n"
+		content += chunk.Content + "\n"
 	}
 
-	systemPrompt := "你是一个知识库助手。请基于以下参考内容回答用户问题。如果无法从参考内容中得到答案，请明确告知。\n参考内容:\n" + context
+	systemPrompt := "你是一个知识库助手。请基于以下参考内容回答用户问题。如果无法从参考内容中得到答案，请明确告知。\n参考内容:\n" + content
 
 	messages := []*schema.Message{
 		schema.SystemMessage(systemPrompt),
@@ -450,12 +450,12 @@ func (ks *kbService) RAGQueryStream(ctx context.Context, userID uint, query stri
 	}
 
 	// 3. 构建提示词
-	var context string
+	var content string
 	for _, chunk := range allChunks {
-		context += chunk.Content + "\n"
+		content += chunk.Content + "\n"
 	}
 
-	systemPrompt := "你是一个有用的助手，你可以获取外部知识来回答用户问题，以下是可利用的知识内容。\n外部知识库内容:\n" + context
+	systemPrompt := "你是一个有用的助手，你可以获取外部知识来回答用户问题，以下是可利用的知识内容。\n外部知识库内容:\n" + content
 	query = "用户提问：" + query
 	messages := []*schema.Message{
 		schema.SystemMessage(systemPrompt),

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"ai-cloud/config"
+	"ai-cloud/internal/component/embedding/ollama"
 	"github.com/cloudwego/eino-ext/components/embedding/openai"
 )
 
@@ -27,9 +28,7 @@ type OpenAIEmbeddingService struct {
 
 // OllamaEmbeddingService 使用Ollama的嵌入服务
 type OllamaEmbeddingService struct {
-	baseURL   string
-	model     string
-	embedder  *openai.Embedder // 作为标准接口保留，但不直接使用
+	embedder  *ollama.OllamaEmbedder // 作为标准接口保留，但不直接使用
 	dimension int
 }
 
@@ -41,7 +40,7 @@ func NewOpenAIEmbeddingService(ctx context.Context) (*OpenAIEmbeddingService, er
 	model := cfg.Model
 	baseURL := cfg.BaseURL
 
-	dimension := 1024 // 默认维度
+	dimension := cfg.Dimension // 默认维度
 
 	fmt.Println("创建OpenAI嵌入服务:", baseURL, "模型:", model)
 
@@ -79,16 +78,13 @@ func NewOllamaEmbeddingService(ctx context.Context) (*OllamaEmbeddingService, er
 
 	ollamaURL := cfg.URL
 	ollamaModel := cfg.Model
-
-	dimension := 1024 // Ollama模型的默认维度
+	dimension := cfg.Dimension
 
 	fmt.Println("创建Ollama嵌入服务:", ollamaURL, "模型:", ollamaModel)
 
-	// 创建一个标准的embedder作为后备，但实际不会使用它的EmbedStrings方法
-	embedder, err := openai.NewEmbedder(ctx, &openai.EmbeddingConfig{
+	embedder, err := ollama.NewOllamaEmbedderEmbedder(ctx, &ollama.OllamaEmbeddingConfig{
 		BaseURL:    ollamaURL,
 		Model:      ollamaModel,
-		Timeout:    60 * time.Second,
 		Dimensions: &dimension,
 	})
 
@@ -97,8 +93,6 @@ func NewOllamaEmbeddingService(ctx context.Context) (*OllamaEmbeddingService, er
 	}
 
 	return &OllamaEmbeddingService{
-		baseURL:   ollamaURL,
-		model:     ollamaModel,
 		embedder:  embedder,
 		dimension: dimension,
 	}, nil
@@ -106,8 +100,7 @@ func NewOllamaEmbeddingService(ctx context.Context) (*OllamaEmbeddingService, er
 
 // EmbedStrings Ollama实现的向量嵌入，使用自定义API调用
 func (s *OllamaEmbeddingService) EmbedStrings(ctx context.Context, texts []string) ([][]float64, error) {
-	// 使用customembedder.go中实现的OllamaEmbedStrings函数
-	return OllamaEmbedStrings(s.baseURL, s.model, ctx, texts)
+	return s.embedder.EmbedStrings(ctx, texts)
 }
 
 // GetDimension 返回Ollama嵌入向量的维度
