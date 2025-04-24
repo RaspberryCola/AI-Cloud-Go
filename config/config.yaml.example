@@ -90,5 +90,5 @@ llm:
   api_key: "your-llm-api-key"
   model: "deepseek-chat"
   base_url: "https://api.deepseek.com/v1"
-  max_tokens: 4096
+  max_tokens: 10240
   temperature: 0.7
