@@ -1,6 +1,7 @@
 package database
 
 import (
+	"ai-cloud/config"
 	"context"
 	"fmt"
 
@@ -8,9 +9,10 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 )
 
+// InitMilvus 初始化
 func InitMilvus(ctx context.Context) (client.Client, error) {
 	milvusClient, err := client.NewClient(ctx, client.Config{
-		Address: "localhost:19530",
+		Address: config.GetConfig().Milvus.Address,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("无法连接到Milvus: %w", err)
@@ -22,25 +24,20 @@ func InitMilvus(ctx context.Context) (client.Client, error) {
 	return milvusClient, nil
 }
 
+// initTextChunksCollection 初始化集合
 func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) error {
-	collectionName := "text_chunks"
+	// 从配置中获取集合名称
+	milvusConfig := config.GetConfig().Milvus
+	collectionName := milvusConfig.CollectionName
 
+	// 检查是否存在
 	exists, err := milvusClinet.HasCollection(ctx, collectionName)
 	if err != nil {
 		return fmt.Errorf("检查集合存在失败: %w", err)
 	}
-
 	if exists {
 		return nil
 	}
-
-	//if exists {
-	//	// 如果集合已存在，先删除它
-	//	if err := milvusClinet.DropCollection(ctx, collectionName); err != nil {
-	//		return fmt.Errorf("删除现有集合失败: %w", err)
-	//	}
-	//	fmt.Println("已删除现有的text_chunks集合，将重新创建")
-	//}
 
 	// 创建集合
 	schema := &entity.Schema{
@@ -49,74 +46,75 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 		AutoID:         false,
 		Fields: []*entity.Field{
 			{
-				Name:       "id",
+				Name:       FieldNameID,
 				DataType:   entity.FieldTypeVarChar,
 				PrimaryKey: true,
 				AutoID:     false,
 				TypeParams: map[string]string{
-					"max_length": "64",
+					"max_length": milvusConfig.IDMaxLength,
 				},
 			},
 			{
-				Name:     "content",
+				Name:     FieldNameContent,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
-					"max_length": "65535",
+					"max_length": milvusConfig.ContentMaxLength,
 				},
 			},
 			{
-				Name:     "document_id",
+				Name:     FieldNameDocumentID,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
-					"max_length": "64",
+					"max_length": milvusConfig.DocIDMaxLength,
 				},
 			},
 			{
-				Name:     "document_name",
+				Name:     FieldNameDocumentName,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
-					"max_length": "256",
+					"max_length": milvusConfig.DocNameMaxLength,
 				},
 			},
 			{
-				Name:     "kb_id",
+				Name:     FieldNameKBID,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
-					"max_length": "64",
+					"max_length": milvusConfig.KbIDMaxLength,
 				},
 			},
 			{
-				Name:     "chunk_index",
+				Name:     FieldNameChunkIndex,
 				DataType: entity.FieldTypeInt32,
 			},
 			{
-				Name:     "vector",
+				Name:     FieldNameVector,
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
-					"dim": "1024",
+					"dim": fmt.Sprintf("%d", milvusConfig.VectorDimension),
 				},
 			},
 		},
 	}
 
+	// 创建集合
 	if err := milvusClinet.CreateCollection(ctx, schema, 1); err != nil {
-		return fmt.Errorf("创建集合失败: %w", err)
+		return fmt.Errorf("initTextChunksCollection failed, CreateCollection err: %+v", err)
+	}
+
+	// 构建索引
+	idx, indexErr := milvusConfig.GetMilvusIndex()
+	if indexErr != nil {
+		return fmt.Errorf("initTextChunksCollection failed, GetMilvusIndex err: %+v", err)
 	}
 
 	// 创建索引
-	idx, err := entity.NewIndexIvfFlat(entity.COSINE, 128)
-	if err != nil {
-		return fmt.Errorf("创建索引失败: %w", err)
-	}
-
-	if err := milvusClinet.CreateIndex(ctx, collectionName, "vector", idx, false); err != nil {
-		return fmt.Errorf("创建索引失败: %w", err)
+	if err := milvusClinet.CreateIndex(ctx, collectionName, FieldNameVector, idx, false); err != nil {
+		return fmt.Errorf("initTextChunksCollection failed, CreateIndex err: %+v", err)
 	}
 
 	// 加载集合到内存
 	if err := milvusClinet.LoadCollection(ctx, collectionName, false); err != nil {
-		return fmt.Errorf("加载集合失败: %w", err)
+		return fmt.Errorf("initTextChunksCollection failed, LoadCollection err: %+v", err)
 	}
-
 	return nil
 }

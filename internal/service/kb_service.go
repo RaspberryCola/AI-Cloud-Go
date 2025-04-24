@@ -325,7 +325,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	}
 
 	// 4. 将 chunks 存储到 Milvus
-	if err := ks.milvusDao.SaveChunks(chunks); err != nil {
+	if err := ks.milvusDao.SaveChunks(ctx, chunks); err != nil {
 		return fmt.Errorf("存储向量到 Milvus 失败: %w", err)
 	}
 

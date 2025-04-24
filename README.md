@@ -87,7 +87,7 @@ go run cmd/main.go
 ## 启动步骤
 
 1. 环境配置
-   - 修改 `config/config.yaml` 文件，配置嵌入模型和语言模型的API密钥
+   - 修改 `config/config.yaml` 文件，配置各服务连接信息和AI模型API密钥
    ```yaml
    # 嵌入模型配置
    embedding:
@@ -102,13 +102,15 @@ go run cmd/main.go
        url: "http://localhost:11434"
        model: "mxbai-embed-large"
 
+   # Milvus向量数据库配置
+   milvus:
+     address: "localhost:19530"
+     
    # 语言模型配置
    llm:
-     service: "remote"
-     remote:
-       api_key: "your-llm-api-key"
-       model: "deepseek-chat"
-       base_url: "https://api.deepseek.com/v1"
+     api_key: "your-llm-api-key"
+     model: "deepseek-chat"
+     base_url: "https://api.deepseek.com/v1"
    ```
 
 2. 启动 Docker 容器
@@ -148,14 +150,15 @@ go run cmd/main.go
 - 存储桶: ai-cloud
 
 ### Milvus (向量数据库)
-- 端点: localhost:19530
+- 配置路径: `milvus.address` 在 `config.yaml` 中
+- 默认地址: localhost:19530
 - 管理界面: 需要额外安装Attu (Milvus官方GUI工具)
   - 在端口9091只提供监控信息: http://localhost:9091/webui (Milvus 2.5.0+版本)
   - 完整管理界面需安装Attu: `docker run -p 8000:3000 -e MILVUS_URL=localhost:19530 zilliz/attu:latest`
   - 访问Attu: http://localhost:8000
 
 ### 环境配置
-项目使用 `config/config.yaml` 文件配置第三方 AI 模型的访问，主要包括：
+项目使用 `config/config.yaml` 文件配置服务连接和第三方 AI 模型的访问，主要包括：
 
 1. **嵌入模型配置**
    - 支持远程API服务（如OpenAI）和Ollama本地Embedding模型
@@ -165,12 +168,17 @@ go run cmd/main.go
    - 用于知识库问答和智能处理
    - 默认使用 DeepSeek 的 deepseek-chat 模型
 
+3. **Milvus配置**
+   - 用于向量存储和检索
+   - 配置项: `milvus.address`
+
 ## 故障排除
 
 ### 常见问题
 
 1. **程序启动卡住**
    - 检查 Milvus 是否正常启动，查看日志 `docker logs milvus-standalone`
+   - 检查 `config/config.yaml` 文件中的 Milvus 地址配置是否正确
    - 检查 `config/config.yaml` 文件是否配置了正确的 API 密钥
    - 确保 MySQL 中已创建 ai_cloud 数据库
 
@@ -181,6 +189,7 @@ go run cmd/main.go
 3. **向量数据库操作失败**
    - 检查 Milvus 服务状态
    - 确认向量维度设置是否与模型输出一致
+   - 确认 config.yaml 中的 milvus.address 配置是否正确
 
 4. **Milvus 管理界面访问失败**
    - Milvus 2.5以上版本在端口9091提供简易WebUI: http://localhost:9091/webui
