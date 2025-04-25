@@ -46,6 +46,23 @@ storage:
     use_ssl: false
     region: ""
 
+# Milvus向量数据库配置
+milvus:
+  address: "localhost:19530"  # Milvus服务地址
+  collection_name: "text_chunks"  # 向量集合名称
+  vector_dimension: 1024  # 向量维度
+  index_type: "IVF_FLAT"  # 索引类型 (IVF_FLAT, IVF_SQ8, HNSW)
+  metric_type: "COSINE"  # 距离计算方式 (COSINE, L2, IP)
+  nlist: 128  # IVF索引聚类数量
+  # 搜索参数
+  nprobe: 16  # 搜索时检查的聚类数量，值越大结果越精确但越慢
+  # 字段最大长度配置
+  id_max_length: "64"  # ID字段最大长度
+  content_max_length: "65535"  # 内容字段最大长度
+  doc_id_max_length: "64"  # 文档ID字段最大长度
+  doc_name_max_length: "256"  # 文档名称字段最大长度
+  kb_id_max_length: "64"  # 知识库ID字段最大长度
+
 rag:
   chunk_size: 1500
   overlap_size: 500
@@ -102,9 +119,48 @@ func main() {
     port := cfg.Server.Port
     embeddingService := cfg.Embedding.Service
     llmModel := cfg.LLM.Model
+    milvusAddress := cfg.Milvus.Address
     
     // ...
 }
+```
+
+## Milvus向量数据库配置
+
+配置Milvus服务连接地址和向量集合参数：
+
+```yaml
+# Milvus向量数据库配置
+milvus:
+  address: "localhost:19530"  # Milvus服务地址
+  collection_name: "text_chunks"  # 向量集合名称
+  vector_dimension: 1024  # 向量维度
+  index_type: "IVF_FLAT"  # 索引类型 (IVF_FLAT, IVF_SQ8, HNSW)
+  metric_type: "COSINE"  # 距离计算方式 (COSINE, L2, IP)
+  nlist: 128  # IVF索引聚类数量
+  # 搜索参数
+  nprobe: 16  # 搜索时检查的聚类数量，值越大结果越精确但越慢
+  # 字段最大长度配置
+  id_max_length: "64"  # ID字段最大长度
+  content_max_length: "65535"  # 内容字段最大长度
+  doc_id_max_length: "64"  # 文档ID字段最大长度
+  doc_name_max_length: "256"  # 文档名称字段最大长度
+  kb_id_max_length: "64"  # 知识库ID字段最大长度
+```
+
+此配置在初始化Milvus客户端和创建集合时使用：
+
+```go
+// 初始化Milvus客户端
+milvusClient, err := client.NewClient(ctx, client.Config{
+    Address: config.GetConfig().Milvus.Address,
+})
+
+// 使用配置创建集合
+milvusConfig := config.GetConfig().Milvus
+collectionName := milvusConfig.CollectionName
+vectorDim := milvusConfig.VectorDimension
+// ...
 ```
 
 ## 嵌入服务配置
@@ -180,6 +236,7 @@ llm:
 | `LLM_API_KEY` | `llm.api_key` |
 | `LLM_MODEL` | `llm.model` |
 | `LLM_BASE_URL` | `llm.base_url` |
+| `MILVUS_ADDRESS` | `milvus.address` |
 
 ## 注意事项
 

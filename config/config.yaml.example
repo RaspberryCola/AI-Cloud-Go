@@ -9,7 +9,7 @@ database:
   name: "ai_cloud"
 
 jwt:
-  secret: "your-secret-key-here"
+  secret: "your-jwt-secret"
   expiration_hours: 24
 
 storage:
@@ -17,10 +17,10 @@ storage:
   local:
     base_dir: "./storage_data"
   oss:
-    endpoint: "oss-cn-nanjing.aliyuncs.com"
-    bucket: "smkl-obsidian"
-    access_key_id: ""
-    access_key_secret: ""
+    endpoint: "your-oss-endpoint"
+    bucket: "your-oss-bucket"
+    access_key_id: "your-access-key-id"
+    access_key_secret: "your-access-key-secret"
   minio:
     endpoint: "localhost:9000"
     bucket: "ai-cloud"
@@ -28,6 +28,23 @@ storage:
     access_key_secret: "minioadmin"
     use_ssl: false
     region: ""
+
+# Milvus向量数据库配置
+milvus:
+  address: "localhost:19530"
+  collection_name: "text_chunks"
+  vector_dimension: 1024
+  index_type: "IVF_FLAT"
+  metric_type: "COSINE"
+  nlist: 128
+  # 搜索参数
+  nprobe: 16
+  # 字段最大长度配置
+  id_max_length: "64"
+  content_max_length: "65535"
+  doc_id_max_length: "64"
+  doc_name_max_length: "256"
+  kb_id_max_length: "64"
 
 rag:
   chunk_size: 1500
@@ -55,11 +72,11 @@ cors:
 
 # 嵌入模型配置
 embedding:
-  service: "ollama" # remote 或 ollama
+  service: "remote" # remote 或 ollama
 
   # 远程嵌入模型配置（OpenAI API，当 service=remote 时使用）
   remote:
-    api_key: "sk-example-embedding-key"
+    api_key: "sk-your-api-key"
     model: "text-embedding-3-large"
     base_url: "https://api.openai.com/v1"
 
@@ -70,7 +87,7 @@ embedding:
 
 # 语言模型配置
 llm:
-  api_key: "your-key"
+  api_key: "your-llm-api-key"
   model: "deepseek-chat"
   base_url: "https://api.deepseek.com/v1"
   max_tokens: 10240

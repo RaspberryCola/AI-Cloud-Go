@@ -44,6 +44,23 @@ storage:
     use_ssl: false
     region: ""
 
+# Milvus向量数据库配置
+milvus:
+  address: "localhost:19530"
+  collection_name: "text_chunks"
+  vector_dimension: 1024
+  index_type: "IVF_FLAT"
+  metric_type: "COSINE"
+  nlist: 128
+  # 搜索参数
+  nprobe: 16
+  # 字段最大长度配置
+  id_max_length: "64"
+  content_max_length: "65535"
+  doc_id_max_length: "64"
+  doc_name_max_length: "256"
+  kb_id_max_length: "64"
+
 # 嵌入模型配置
 embedding:
   service: "remote" # remote 或 ollama
@@ -150,7 +167,50 @@ docker logs milvus-standalone
    ```
    应返回包含`mxbai-embed-large`的模型列表。
 
-## 步骤五：启动AI-Cloud-Go
+## 步骤五：确认Milvus配置
+
+Milvus的连接地址和向量集合参数在配置文件中指定：
+
+```yaml
+# Milvus向量数据库配置
+milvus:
+  address: "localhost:19530"
+  collection_name: "text_chunks"
+  vector_dimension: 1024
+  index_type: "IVF_FLAT"
+  metric_type: "COSINE"
+  nlist: 128
+  # 搜索参数
+  nprobe: 16
+  # 字段最大长度配置
+  id_max_length: "64"
+  content_max_length: "65535"
+  doc_id_max_length: "64"
+  doc_name_max_length: "256"
+  kb_id_max_length: "64"
+```
+
+如果您使用的是自定义的Milvus部署或远程Milvus服务，请相应地修改地址。您也可以根据需要调整以下参数：
+
+- `collection_name`: 向量集合名称
+- `vector_dimension`: 向量维度，应与嵌入模型输出维度匹配
+- `index_type`: 索引类型，支持IVF_FLAT、IVF_SQ8、HNSW等
+- `metric_type`: 距离计算方式，支持COSINE、L2、IP等
+- `nlist`: IVF索引的聚类数量
+- `nprobe`: 搜索时检查的聚类数量，值越大结果越精确但查询越慢
+- `*_max_length`: 各字段的最大长度设置，特别是处理大文档时可能需要调整content_max_length
+
+验证Milvus是否正常运行：
+
+```bash
+# 检查Milvus容器状态
+docker ps | grep milvus
+
+# 查看Milvus日志
+docker logs milvus-standalone
+```
+
+## 步骤六：启动AI-Cloud-Go
 
 ### 下载依赖
 
@@ -170,7 +230,7 @@ go run cmd/main.go
 [GIN-debug] Listening and serving HTTP on :8080
 ```
 
-## 步骤六：验证安装
+## 步骤七：验证安装
 
 ### 检查API服务
 
@@ -249,26 +309,9 @@ curl -X POST http://localhost:11434/api/embed -d '{"model":"mxbai-embed-large", 
 - 解决：确保MySQL容器已启动，运行`docker ps | grep mysql`
 
 ### Milvus连接问题
-- 错误：`存储向量到 Milvus 失败: 插入数据失败: the length of document_name exceeds max length`
-- 解决：文档名称过长，已在新版本中自动处理，如果仍有问题，请升级代码
+- 错误：`无法连接到Milvus`
+- 解决：
+  1. 确保Milvus容器正在运行：`docker ps | grep milvus`
+  2. 检查config.yaml中的milvus.address配置是否正确
+  3. 如果使用自定义Milvus部署，确保端口映射正确
 
-### 向量数组为空
-- 错误：`num_rows should be greater than 0: invalid parameter`
-- 解决：检查文档内容是否可提取文本，确保嵌入服务正常工作
-
-### 嵌入服务问题
-- 如果使用OpenAI：检查API密钥和网络连接
-- 如果使用Ollama：确保模型已下载并且服务运行正常
-  - 运行`ollama list`查看已安装的模型
-  - 运行`curl http://localhost:11434/api/tags`检查Ollama服务
-
-### 权限问题
-- 如果遇到API权限错误，确保您已登录并在请求头中包含有效的JWT令牌
-- 错误格式：`{"error":"无效的token"}`或`{"error":"请先登录"}`
-
-## 下一步
-
-- 查看[完整文档](./README.md)了解更多细节
-- 阅读[嵌入服务配置文档](./EMBEDDING_CONFIG_README.md)了解嵌入服务架构
-- 阅读[配置指南](./CONFIG_README.md)了解完整配置选项
-- 探索[API文档](http://localhost:8080/swagger/index.html)了解所有可用端点 
