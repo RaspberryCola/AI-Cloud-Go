@@ -6,12 +6,14 @@ import (
 
 // KnowledgeBase 知识库
 type KnowledgeBase struct {
-	ID          string    `gorm:"primaryKey;type:char(36)"` // UUID
-	Name        string    `gorm:"not null"`                 // 知识库名称
-	Description string    // 知识库描述
-	UserID      uint      `gorm:"index"` // 创建者ID
-	CreatedAt   time.Time `gorm:"autoCreateTime"`
-	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
+	ID               string    `gorm:"primaryKey;type:char(36)"` // UUID
+	Name             string    `gorm:"not null"`                 // 知识库名称
+	Description      string    // 知识库描述
+	UserID           uint      `gorm:"index"` // 创建者ID
+	CreatedAt        time.Time `gorm:"autoCreateTime"`
+	UpdatedAt        time.Time `gorm:"autoUpdateTime"`
+	EmbedModelID     string    `gorm:"index"` // 关联的embedding模型id
+	MilvusCollection string    //对应的milvus collection名称
 }
 
 // Document 知识库文档

@@ -28,6 +28,7 @@ func InitDB() (*gorm.DB, error) {
 		&model.File{},
 		&model.KnowledgeBase{},
 		&model.Document{},
+		&model.Model{},
 	); err != nil {
 		return nil, err
 	}

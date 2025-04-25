@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController) {
+func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController, mc *controller.ModelController) {
 	api := r.Group("/api")
 	{
 
@@ -48,7 +48,15 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			kb.POST("/retrieve", kc.Retrieve)
 			kb.POST("/chat", kc.Chat)
 			kb.POST("/stream", kc.ChatStream)
-
+		}
+		model := api.Group("model")
+		model.Use(middleware.JWTAuth())
+		{
+			model.POST("/create", mc.CreateModel)
+			model.PUT("/update", mc.UpdateModel)
+			model.DELETE("/delete", mc.DeleteModel)
+			model.GET("/get", mc.GetModel)
+			model.GET("/page", mc.PageModels)
 		}
 	}
 }

@@ -31,11 +31,15 @@ func main() {
 	kbService := service.NewKBService(kbDao, milvusDao, fileService)
 	kbController := controller.NewKBController(kbService, fileService)
 
+	modelDao := dao.NewModelDao(db)
+	modelService := service.NewModelService(modelDao)
+	modelController := controller.NewModelController(modelService)
+
 	r := gin.Default()
 	// 配置跨域
 	r.Use(middleware.SetupCORS())
 	// 配置路由
-	router.SetUpRouters(r, userController, fileController, kbController)
+	router.SetUpRouters(r, userController, fileController, kbController, modelController)
 
 	r.Run(":8080")
 }

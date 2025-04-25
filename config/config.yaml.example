@@ -1,6 +1,7 @@
 server:
   port: "8080"
 
+# mysql配置
 database:
   host: "localhost"
   port: "3306"
@@ -12,6 +13,7 @@ jwt:
   secret: "your-jwt-secret"
   expiration_hours: 24
 
+# 后端文件存储服务
 storage:
   type: "minio" # local, oss, minio
   local:
