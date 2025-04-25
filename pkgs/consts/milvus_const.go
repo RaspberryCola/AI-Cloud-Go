@@ -1,4 +1,4 @@
-package database
+package consts
 
 // 集合相关常量定义
 const (

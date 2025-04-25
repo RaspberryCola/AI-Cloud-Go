@@ -2,8 +2,8 @@ package dao
 
 import (
 	"ai-cloud/config"
-	"ai-cloud/internal/database"
 	"ai-cloud/internal/model"
+	"ai-cloud/pkgs/consts"
 	"context"
 	"fmt"
 	"github.com/hashicorp/go-multierror"
@@ -11,12 +11,15 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // MilvusDao 向量数据库访问接口
 type MilvusDao interface {
+	CreateCollection(ctx context.Context, collectionName string, dimension int) error
+
 	// SaveChunks 保存文本块到向量数据库
 	SaveChunks(ctx context.Context, chunks []model.Chunk) error
 
@@ -35,6 +38,98 @@ type milvusDao struct {
 // NewMilvusDao 创建一个新的MilvusDao实例
 func NewMilvusDao(milvus client.Client) MilvusDao {
 	return &milvusDao{mv: milvus}
+}
+
+// 新增函数：根据模型信息创建collection
+func (m *milvusDao) CreateCollection(ctx context.Context, collectionName string, dimension int) error {
+	milvusConfig := config.GetConfig().Milvus
+
+	exists, err := m.mv.HasCollection(ctx, collectionName)
+	if err != nil {
+		return fmt.Errorf("检查集合存在失败: %w", err)
+	}
+
+	if exists {
+		return nil
+	}
+
+	// 创建集合
+	schema := &entity.Schema{
+		CollectionName: collectionName,
+		Description:    "存储文档分块和向量",
+		AutoID:         false,
+		Fields: []*entity.Field{
+			{
+				Name:       consts.FieldNameID,
+				DataType:   entity.FieldTypeVarChar,
+				PrimaryKey: true,
+				AutoID:     false,
+				TypeParams: map[string]string{
+					"max_length": milvusConfig.IDMaxLength,
+				},
+			},
+			{
+				Name:     consts.FieldNameContent,
+				DataType: entity.FieldTypeVarChar,
+				TypeParams: map[string]string{
+					"max_length": milvusConfig.ContentMaxLength,
+				},
+			},
+			{
+				Name:     consts.FieldNameDocumentID,
+				DataType: entity.FieldTypeVarChar,
+				TypeParams: map[string]string{
+					"max_length": milvusConfig.DocIDMaxLength,
+				},
+			},
+			{
+				Name:     consts.FieldNameDocumentName,
+				DataType: entity.FieldTypeVarChar,
+				TypeParams: map[string]string{
+					"max_length": milvusConfig.DocNameMaxLength,
+				},
+			},
+			{
+				Name:     consts.FieldNameKBID,
+				DataType: entity.FieldTypeVarChar,
+				TypeParams: map[string]string{
+					"max_length": milvusConfig.KbIDMaxLength,
+				},
+			},
+			{
+				Name:     consts.FieldNameChunkIndex,
+				DataType: entity.FieldTypeInt32,
+			},
+			{
+				Name:     consts.FieldNameVector,
+				DataType: entity.FieldTypeFloatVector,
+				TypeParams: map[string]string{
+					"dim": strconv.Itoa(dimension),
+				},
+			},
+		},
+	}
+
+	if err := m.mv.CreateCollection(ctx, schema, 1); err != nil {
+		return fmt.Errorf("创建集合失败: %w", err)
+	}
+
+	// 创建索引
+	idx, err := entity.NewIndexIvfFlat(entity.COSINE, 128)
+	if err != nil {
+		return fmt.Errorf("创建索引失败: %w", err)
+	}
+
+	if err := m.mv.CreateIndex(ctx, collectionName, "vector", idx, false); err != nil {
+		return fmt.Errorf("创建索引失败: %w", err)
+	}
+
+	// 加载集合到内存
+	if err := m.mv.LoadCollection(ctx, collectionName, false); err != nil {
+		return fmt.Errorf("加载集合失败: %w", err)
+	}
+
+	return nil
 }
 
 // SaveChunks 保存文本块到Milvus向量数据库
@@ -78,7 +173,7 @@ type chunkData struct {
 func (m *milvusDao) prepareChunkData(chunks []model.Chunk) (*chunkData, error) {
 	milvusConfig := config.GetConfig().Milvus
 	data := &chunkData{
-		collectionName: database.CollectionNameTextChunks,
+		collectionName: consts.CollectionNameTextChunks,
 		vectorDim:      milvusConfig.VectorDimension,
 	}
 
@@ -122,13 +217,13 @@ func (m *milvusDao) prepareChunkData(chunks []model.Chunk) (*chunkData, error) {
 // 将预处理的数据转换为Milvus插入操作所需的列格式
 // 返回包含所有数据列的切片
 func (m *milvusDao) createDataColumns(data *chunkData) []entity.Column {
-	idColumn := entity.NewColumnVarChar(database.FieldNameID, data.ids)
-	contentColumn := entity.NewColumnVarChar(database.FieldNameContent, data.contents)
-	documentIDColumn := entity.NewColumnVarChar(database.FieldNameDocumentID, data.documentIDs)
-	documentNameColumn := entity.NewColumnVarChar(database.FieldNameDocumentName, data.documentNames)
-	kbIDColumn := entity.NewColumnVarChar(database.FieldNameKBID, data.kbIDs)
-	indexColumn := entity.NewColumnInt32(database.FieldNameChunkIndex, data.chunkIndices)
-	vectorColumn := entity.NewColumnFloatVector(database.FieldNameVector, data.vectorDim, data.vectors)
+	idColumn := entity.NewColumnVarChar(consts.FieldNameID, data.ids)
+	contentColumn := entity.NewColumnVarChar(consts.FieldNameContent, data.contents)
+	documentIDColumn := entity.NewColumnVarChar(consts.FieldNameDocumentID, data.documentIDs)
+	documentNameColumn := entity.NewColumnVarChar(consts.FieldNameDocumentName, data.documentNames)
+	kbIDColumn := entity.NewColumnVarChar(consts.FieldNameKBID, data.kbIDs)
+	indexColumn := entity.NewColumnInt32(consts.FieldNameChunkIndex, data.chunkIndices)
+	vectorColumn := entity.NewColumnFloatVector(consts.FieldNameVector, data.vectorDim, data.vectors)
 
 	return []entity.Column{
 		idColumn,
@@ -176,9 +271,9 @@ func (m *milvusDao) insertDataWithRetry(ctx context.Context, collectionName stri
 // 使用IN操作符构建删除表达式，一次性删除多个文档的所有块
 func (m *milvusDao) DeleteChunks(docIDs []string) error {
 	// 构建删除表达式，使用 IN 操作符
-	expr := fmt.Sprintf("%s in [\"%s\"]", database.FieldNameDocumentID, strings.Join(docIDs, "\",\""))
+	expr := fmt.Sprintf("%s in [\"%s\"]", consts.FieldNameDocumentID, strings.Join(docIDs, "\",\""))
 	// 删除
-	if err := m.mv.Delete(context.Background(), database.CollectionNameTextChunks, "", expr); err != nil {
+	if err := m.mv.Delete(context.Background(), consts.CollectionNameTextChunks, "", expr); err != nil {
 		return fmt.Errorf("删除向量数据失败：%w", err)
 	}
 	return nil
@@ -196,17 +291,17 @@ func (m *milvusDao) DeleteChunks(docIDs []string) error {
 func (m *milvusDao) Search(kbID string, vector []float32, topK int) ([]model.Chunk, error) {
 	// 构建搜索参数
 	sp, _ := entity.NewIndexIvfFlatSearchParam(config.GetConfig().Milvus.Nprobe)
-	expr := fmt.Sprintf("%s == \"%s\"", database.FieldNameKBID, kbID)
+	expr := fmt.Sprintf("%s == \"%s\"", consts.FieldNameKBID, kbID)
 
 	// 执行搜索
 	searchResult, err := m.mv.Search(
 		context.Background(),
-		database.CollectionNameTextChunks, // 集合名称：指定要搜索的Milvus集合
-		[]string{},                        // 分区名称：空表示搜索所有分区
-		expr,                              // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
-		database.SearchFields,             // 输出字段：指定返回结果中包含哪些字段
+		consts.CollectionNameTextChunks, // 集合名称：指定要搜索的Milvus集合
+		[]string{},                      // 分区名称：空表示搜索所有分区
+		expr,                            // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
+		consts.SearchFields,             // 输出字段：指定返回结果中包含哪些字段
 		[]entity.Vector{entity.FloatVector(vector)}, // 查询向量：将输入向量转换为Milvus向量格式
-		database.FieldNameVector,                    // 向量字段名：指定在哪个字段上执行向量搜索
+		consts.FieldNameVector,                      // 向量字段名：指定在哪个字段上执行向量搜索
 		config.GetConfig().Milvus.GetMetricType(),   // 度量类型：如何计算向量相似度（如余弦相似度、欧几里得距离等）
 		topK, // 返回数量：返回的最相似结果数量
 		sp,   // 搜索参数：索引特定的搜索参数，如nprobe（探测聚类数）
@@ -239,27 +334,27 @@ func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]mo
 			return nil, fmt.Errorf("unexpected type for ID column: %T", result.IDs)
 		}
 
-		contentCol, ok := result.Fields.GetColumn(database.FieldNameContent).(*entity.ColumnVarChar)
+		contentCol, ok := result.Fields.GetColumn(consts.FieldNameContent).(*entity.ColumnVarChar)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for content column")
 		}
 
-		docIDCol, ok := result.Fields.GetColumn(database.FieldNameDocumentID).(*entity.ColumnVarChar)
+		docIDCol, ok := result.Fields.GetColumn(consts.FieldNameDocumentID).(*entity.ColumnVarChar)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for document ID column")
 		}
 
-		docNameCol, ok := result.Fields.GetColumn(database.FieldNameDocumentName).(*entity.ColumnVarChar)
+		docNameCol, ok := result.Fields.GetColumn(consts.FieldNameDocumentName).(*entity.ColumnVarChar)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for document Name column")
 		}
 
-		kbIDCol, ok := result.Fields.GetColumn(database.FieldNameKBID).(*entity.ColumnVarChar)
+		kbIDCol, ok := result.Fields.GetColumn(consts.FieldNameKBID).(*entity.ColumnVarChar)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for KB ID column")
 		}
 
-		indexCol, ok := result.Fields.GetColumn(database.FieldNameChunkIndex).(*entity.ColumnInt32)
+		indexCol, ok := result.Fields.GetColumn(consts.FieldNameChunkIndex).(*entity.ColumnInt32)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for index column")
 		}

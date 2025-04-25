@@ -3,7 +3,9 @@ package controller
 import (
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/service"
+	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -19,7 +21,7 @@ func NewModelController(svc service.ModelService) *ModelController {
 func (c *ModelController) CreateModel(ctx *gin.Context) {
 	var req model.CreateModelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误:"+err.Error())
 		return
 	}
 
@@ -40,13 +42,15 @@ func (c *ModelController) CreateModel(ctx *gin.Context) {
 	}
 
 	if err := c.svc.CreateModel(ctx.Request.Context(), m); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalError(ctx, errcode.InternalServerError, err.Error())
+		fmt.Println("创建模型失败:", err)
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, m)
+	response.SuccessWithMessage(ctx, "创建模型成功", nil)
 }
 
+// TODO:修改返回格式
 func (c *ModelController) UpdateModel(ctx *gin.Context) {
 	id := ctx.Param("id")
 	var req model.CreateModelRequest

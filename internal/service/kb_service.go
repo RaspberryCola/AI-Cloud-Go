@@ -28,7 +28,7 @@ import (
 
 type KBService interface {
 	// 知识库
-	CreateDB(name, description string, userID uint) error                           // 创建知识库
+	CreateKB(userID uint, name, description, embedModelID string) error             // 创建知识库
 	DeleteKB(userID uint, kbID string) error                                        // 删除知识库
 	PageList(userID uint, page int, size int) (int64, []model.KnowledgeBase, error) // 获取知识库列表
 	GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error)             // 获取知识库详情
@@ -51,6 +51,7 @@ type KBService interface {
 
 type kbService struct {
 	kbDao            dao.KnowledgeBaseDao
+	modelDao         dao.ModelDao
 	milvusDao        dao.MilvusDao
 	fileService      FileService
 	storageDriver    storage.Driver
@@ -58,7 +59,7 @@ type kbService struct {
 	llm              *openai.ChatModel
 }
 
-func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileService FileService) KBService {
+func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileService FileService, modelDao dao.ModelDao) KBService {
 	ctx := context.Background()
 
 	cfg := config.AppConfigInstance.Storage
@@ -90,6 +91,7 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 	return &kbService{
 		kbDao:            kbDao,
 		milvusDao:        milvusDao,
+		modelDao:         modelDao,
 		fileService:      fileService,
 		storageDriver:    driver,
 		embeddingService: embeddingService,
@@ -106,20 +108,32 @@ func getEnvWithDefault(key, defaultValue string) string {
 	return value
 }
 
-func (ks *kbService) CreateDB(name, description string, userID uint) error {
-	if name == "" {
-		return errors.New("知识库名称不能为空")
-	}
+func (ks *kbService) CreateKB(userID uint, name, description, embedModelID string) error {
+
+	collectionName := fmt.Sprintf("kb_%s", embedModelID)
 
 	kb := &model.KnowledgeBase{
-		ID:          GenerateUUID(),
-		Name:        name,
-		Description: description,
-		UserID:      userID,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		ID:               GenerateUUID(),
+		Name:             name,
+		Description:      description,
+		UserID:           userID,
+		EmbedModelID:     embedModelID,
+		MilvusCollection: collectionName,
 	}
 
+	embedModel, err := ks.modelDao.GetByID(context.Background(), embedModelID)
+	if err != nil {
+		return errors.New("embedding model not found")
+	}
+
+	dimension := embedModel.Dimension
+
+	// 创建milvus collection
+	if err := ks.milvusDao.CreateCollection(context.Background(), collectionName, dimension); err != nil {
+		return errors.New("创建milvus collection失败")
+	}
+
+	// 保存知识库记录
 	if err := ks.kbDao.CreateKB(kb); err != nil {
 		return errors.New("知识库创建失败")
 	}

@@ -2,9 +2,9 @@ package database
 
 import (
 	"ai-cloud/config"
+	"ai-cloud/pkgs/consts"
 	"context"
 	"fmt"
-
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 )
@@ -46,7 +46,7 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 		AutoID:         false,
 		Fields: []*entity.Field{
 			{
-				Name:       FieldNameID,
+				Name:       consts.FieldNameID,
 				DataType:   entity.FieldTypeVarChar,
 				PrimaryKey: true,
 				AutoID:     false,
@@ -55,39 +55,39 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 				},
 			},
 			{
-				Name:     FieldNameContent,
+				Name:     consts.FieldNameContent,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
 					"max_length": milvusConfig.ContentMaxLength,
 				},
 			},
 			{
-				Name:     FieldNameDocumentID,
+				Name:     consts.FieldNameDocumentID,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
 					"max_length": milvusConfig.DocIDMaxLength,
 				},
 			},
 			{
-				Name:     FieldNameDocumentName,
+				Name:     consts.FieldNameDocumentName,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
 					"max_length": milvusConfig.DocNameMaxLength,
 				},
 			},
 			{
-				Name:     FieldNameKBID,
+				Name:     consts.FieldNameKBID,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
 					"max_length": milvusConfig.KbIDMaxLength,
 				},
 			},
 			{
-				Name:     FieldNameChunkIndex,
+				Name:     consts.FieldNameChunkIndex,
 				DataType: entity.FieldTypeInt32,
 			},
 			{
-				Name:     FieldNameVector,
+				Name:     consts.FieldNameVector,
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
 					"dim": fmt.Sprintf("%d", milvusConfig.VectorDimension),
@@ -108,7 +108,7 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 	}
 
 	// 创建索引
-	if err := milvusClinet.CreateIndex(ctx, collectionName, FieldNameVector, idx, false); err != nil {
+	if err := milvusClinet.CreateIndex(ctx, collectionName, consts.FieldNameVector, idx, false); err != nil {
 		return fmt.Errorf("initTextChunksCollection failed, CreateIndex err: %+v", err)
 	}
 
@@ -118,3 +118,96 @@ func initTextChunksCollection(ctx context.Context, milvusClinet client.Client) e
 	}
 	return nil
 }
+
+//
+//// 新增函数：根据模型信息创建collection
+//func CreateCollection(ctx context.Context, milvusClient client.Client, collectionName string, dimension int) error {
+//	milvusConfig := config.GetConfig().Milvus
+//
+//	exists, err := milvusClient.HasCollection(ctx, collectionName)
+//	if err != nil {
+//		return fmt.Errorf("检查集合存在失败: %w", err)
+//	}
+//
+//	if exists {
+//		return nil
+//	}
+//
+//	// 创建集合
+//	schema := &entity.Schema{
+//		CollectionName: collectionName,
+//		Description:    "存储文档分块和向量",
+//		AutoID:         false,
+//		Fields: []*entity.Field{
+//			{
+//				Name:       FieldNameID,
+//				DataType:   entity.FieldTypeVarChar,
+//				PrimaryKey: true,
+//				AutoID:     false,
+//				TypeParams: map[string]string{
+//					"max_length": milvusConfig.IDMaxLength,
+//				},
+//			},
+//			{
+//				Name:     FieldNameContent,
+//				DataType: entity.FieldTypeVarChar,
+//				TypeParams: map[string]string{
+//					"max_length": milvusConfig.ContentMaxLength,
+//				},
+//			},
+//			{
+//				Name:     FieldNameDocumentID,
+//				DataType: entity.FieldTypeVarChar,
+//				TypeParams: map[string]string{
+//					"max_length": milvusConfig.DocIDMaxLength,
+//				},
+//			},
+//			{
+//				Name:     FieldNameDocumentName,
+//				DataType: entity.FieldTypeVarChar,
+//				TypeParams: map[string]string{
+//					"max_length": milvusConfig.DocNameMaxLength,
+//				},
+//			},
+//			{
+//				Name:     FieldNameKBID,
+//				DataType: entity.FieldTypeVarChar,
+//				TypeParams: map[string]string{
+//					"max_length": milvusConfig.KbIDMaxLength,
+//				},
+//			},
+//			{
+//				Name:     FieldNameChunkIndex,
+//				DataType: entity.FieldTypeInt32,
+//			},
+//			{
+//				Name:     FieldNameVector,
+//				DataType: entity.FieldTypeFloatVector,
+//				TypeParams: map[string]string{
+//					"dim": strconv.Itoa(dimension),
+//				},
+//			},
+//		},
+//	}
+//
+//	if err := milvusClient.CreateCollection(ctx, schema, 1); err != nil {
+//		return fmt.Errorf("创建集合失败: %w", err)
+//	}
+//
+//	// 创建索引
+//	idx, err := entity.NewIndexIvfFlat(entity.COSINE, 128)
+//	if err != nil {
+//		return fmt.Errorf("创建索引失败: %w", err)
+//	}
+//
+//	if err := milvusClient.CreateIndex(ctx, collectionName, "vector", idx, false); err != nil {
+//		return fmt.Errorf("创建索引失败: %w", err)
+//	}
+//
+//	// 加载集合到内存
+//	if err := milvusClient.LoadCollection(ctx, collectionName, false); err != nil {
+//		return fmt.Errorf("加载集合失败: %w", err)
+//	}
+//
+//	return nil
+//}

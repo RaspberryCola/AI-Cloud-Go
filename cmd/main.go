@@ -27,13 +27,13 @@ func main() {
 	milvus, _ := database.InitMilvus(context.Background())
 	milvusDao := dao.NewMilvusDao(milvus)
 
-	kbDao := dao.NewKnowledgeBaseDao(db)
-	kbService := service.NewKBService(kbDao, milvusDao, fileService)
-	kbController := controller.NewKBController(kbService, fileService)
-
 	modelDao := dao.NewModelDao(db)
 	modelService := service.NewModelService(modelDao)
 	modelController := controller.NewModelController(modelService)
+
+	kbDao := dao.NewKnowledgeBaseDao(db)
+	kbService := service.NewKBService(kbDao, milvusDao, fileService, modelDao)
+	kbController := controller.NewKBController(kbService, fileService)
 
 	r := gin.Default()
 	// 配置跨域

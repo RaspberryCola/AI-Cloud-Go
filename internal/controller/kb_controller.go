@@ -31,15 +31,13 @@ func (kc *KBController) Create(ctx *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
+	var req model.CreateKBRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
 		return
 	}
-	if err := kc.kbService.CreateDB(req.Name, req.Description, userID); err != nil {
+
+	if err := kc.kbService.CreateKB(userID, req.Name, req.Description, req.EmbedModelID); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "创建失败")
 		return
 	}
