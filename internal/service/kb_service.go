@@ -36,7 +36,7 @@ type KBService interface {
 	// 文档
 
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)    // 添加File到知识库
-	ProcessDocument(doc *model.Document) error                                             // 解析嵌入文档（后续需要细化）
+	ProcessDocument(kbID string, doc *model.Document) error                                // 解析嵌入文档（后续需要细化）
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
 	DeleteDocs(userID uint, docs []string) error                                           // 批量删除文件
 
@@ -50,13 +50,14 @@ type KBService interface {
 }
 
 type kbService struct {
-	kbDao            dao.KnowledgeBaseDao
-	modelDao         dao.ModelDao
-	milvusDao        dao.MilvusDao
-	fileService      FileService
-	storageDriver    storage.Driver
-	embeddingService EmbeddingService // 使用新的嵌入服务接口
-	llm              *openai.ChatModel
+	kbDao         dao.KnowledgeBaseDao
+	modelDao      dao.ModelDao
+	milvusDao     dao.MilvusDao
+	fileService   FileService
+	storageDriver storage.Driver
+	//embeddingService EmbeddingService // 使用新的嵌入服务接口
+	llm            *openai.ChatModel
+	embedFactories map[string]EmbeddingFactory
 }
 
 func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileService FileService, modelDao dao.ModelDao) KBService {
@@ -68,10 +69,15 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 		panic("无法连接到存储服务: " + err.Error())
 	}
 
-	// 使用工厂函数创建合适的嵌入服务
-	embeddingService, err := NewEmbeddingService(ctx)
-	if err != nil {
-		panic("无法创建嵌入服务: " + err.Error())
+	//// 使用工厂函数创建合适的嵌入服务
+	//embeddingService, err := NewEmbeddingService(ctx)
+	//if err != nil {
+	//	panic("无法创建嵌入服务: " + err.Error())
+	//}
+
+	factories := map[string]EmbeddingFactory{
+		"openai": &OpenAIEmbeddingFactory{},
+		"ollama": &OllamaEmbeddingFactory{},
 	}
 
 	// 从配置文件获取LLM配置
@@ -89,13 +95,13 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 	})
 
 	return &kbService{
-		kbDao:            kbDao,
-		milvusDao:        milvusDao,
-		modelDao:         modelDao,
-		fileService:      fileService,
-		storageDriver:    driver,
-		embeddingService: embeddingService,
-		llm:              llm,
+		kbDao:          kbDao,
+		milvusDao:      milvusDao,
+		modelDao:       modelDao,
+		fileService:    fileService,
+		storageDriver:  driver,
+		embedFactories: factories,
+		llm:            llm,
 	}
 }
 
@@ -232,11 +238,33 @@ func (ks *kbService) CreateDocument(userID uint, kbID string, file *model.File) 
 }
 
 // 解析一个文件
-func (ks *kbService) ProcessDocument(doc *model.Document) error {
+func (ks *kbService) ProcessDocument(kbID string, doc *model.Document) error {
 	ctx := context.Background()
 
+	// 获取知识库信息
+	kb, err := ks.kbDao.GetKBByID(kbID)
+	if err != nil {
+		return fmt.Errorf("获取知识库失败: %w", err)
+	}
+	// 获取嵌入模型信息
+	embedModel, err := ks.modelDao.GetByID(ctx, kb.EmbedModelID)
+	if err != nil {
+		return fmt.Errorf("获取嵌入模型失败: %w", err)
+	}
+
+	factory, ok := ks.embedFactories[embedModel.Server]
+	if !ok {
+		return fmt.Errorf("不支持的embedding模型类型，目前仅支持openai和ollama: %s", embedModel.Type)
+	}
+
+	// 使用工厂创建embedding服务实例
+	embeddingService, err := factory.CreateEmbedder(context.Background(), embedModel)
+	if err != nil {
+		return fmt.Errorf("创建embedding服务实例失败: %w", err)
+	}
+
 	// 1. 获取File
-	f := &model.File{}
+	//f := &model.File{}
 	f, err := ks.fileService.GetFileByID(doc.FileID)
 	if err != nil {
 		return fmt.Errorf("获取文件失败: %w", err)
@@ -299,6 +327,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 		return fmt.Errorf("文档解析未生成有效文本块，请检查文档内容或格式")
 	}
 
+	// 4. 向量化
 	for i, text := range texts {
 		textString := []string{text.Content}
 		fmt.Printf("处理第%d个文本块，长度: %d字符\n", i+1, len(text.Content))
@@ -309,7 +338,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 		}
 
 		// 使用抽象的嵌入服务接口进行向量化
-		vectors64, err := ks.embeddingService.EmbedStrings(ctx, textString)
+		vectors64, err := embeddingService.EmbedStrings(ctx, textString)
 		if err != nil {
 			fmt.Printf("向量化失败: %v\n", err)
 			return fmt.Errorf("文本向量化失败: %w", err)
@@ -339,7 +368,7 @@ func (ks *kbService) ProcessDocument(doc *model.Document) error {
 	}
 
 	// 4. 将 chunks 存储到 Milvus
-	if err := ks.milvusDao.SaveChunks(ctx, chunks); err != nil {
+	if err := ks.milvusDao.SaveChunks(ctx, kb.MilvusCollection, chunks); err != nil {
 		return fmt.Errorf("存储向量到 Milvus 失败: %w", err)
 	}
 
@@ -368,7 +397,22 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 	queryList := []string{query}
 
 	// 2. 向量化query，使用抽象的嵌入服务接口
-	embeddings, err := ks.embeddingService.EmbedStrings(ctx, queryList)
+
+	embedModel, err := ks.modelDao.GetByID(ctx, kb.EmbedModelID)
+	if err != nil {
+		return nil, fmt.Errorf("获取嵌入模型失败: %w", err)
+	}
+	factory, ok := ks.embedFactories[embedModel.Server]
+	if !ok {
+		return nil, fmt.Errorf("不支持的embedding模型类型，目前仅支持openai和ollama: %s", embedModel.Type)
+	}
+
+	embeddingService, err := factory.CreateEmbedder(ctx, embedModel)
+	if err != nil {
+		return nil, fmt.Errorf("创建embedding服务实例失败: %w", err)
+	}
+
+	embeddings, err := embeddingService.EmbedStrings(ctx, queryList)
 	if err != nil {
 		return nil, fmt.Errorf("查询向量化失败: %w", err)
 	}
@@ -384,7 +428,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 		return nil, fmt.Errorf("转换后获取到空的float32向量数组，查询文本: %s", query)
 	}
 
-	return ks.milvusDao.Search(kbID, float32Vectors[0], topK)
+	return ks.milvusDao.Search(kbID, kb.MilvusCollection, float32Vectors[0], topK)
 }
 
 // RAGQuery 实现RAG查询

@@ -49,7 +49,7 @@ type OllamaEmbedder struct {
 	conf *OllamaEmbeddingConfig
 }
 
-func NewOllamaEmbedderEmbedder(ctx context.Context, config *OllamaEmbeddingConfig) (*OllamaEmbedder, error) {
+func NewOllamaEmbedder(ctx context.Context, config *OllamaEmbeddingConfig) (*OllamaEmbedder, error) {
 
 	// options config
 	if len(config.BaseURL) == 0 {

@@ -21,10 +21,10 @@ type MilvusDao interface {
 	CreateCollection(ctx context.Context, collectionName string, dimension int) error
 
 	// SaveChunks 保存文本块到向量数据库
-	SaveChunks(ctx context.Context, chunks []model.Chunk) error
+	SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk) error
 
 	// Search 在知识库中搜索相似向量，返回相似度排序后的文本块
-	Search(kbID string, vector []float32, topK int) ([]model.Chunk, error)
+	Search(kbID, collectionName string, vector []float32, topK int) ([]model.Chunk, error)
 
 	// DeleteChunks 删除指定文档的所有文本块
 	DeleteChunks(docIDs []string) error
@@ -135,7 +135,7 @@ func (m *milvusDao) CreateCollection(ctx context.Context, collectionName string,
 // SaveChunks 保存文本块到Milvus向量数据库
 // 该方法会过滤掉无效的文本块，然后将有效的文本块插入到向量数据库中
 // 如果插入失败，会自动重试指定次数
-func (m *milvusDao) SaveChunks(ctx context.Context, chunks []model.Chunk) error {
+func (m *milvusDao) SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk) error {
 	if len(chunks) == 0 {
 		return fmt.Errorf("num_rows should be greater than 0: invalid parameter[expected=invalid num_rows][actual=0")
 	}
@@ -146,7 +146,8 @@ func (m *milvusDao) SaveChunks(ctx context.Context, chunks []model.Chunk) error 
 	if err != nil {
 		return err
 	}
-
+	// 设置目标集合名称
+	preparedData.collectionName = collectionName
 	// 创建数据列
 	columns := m.createDataColumns(preparedData)
 
@@ -288,7 +289,7 @@ func (m *milvusDao) DeleteChunks(docIDs []string) error {
 // 返回:
 //   - 按相似度排序的文本块切片
 //   - 可能的错误
-func (m *milvusDao) Search(kbID string, vector []float32, topK int) ([]model.Chunk, error) {
+func (m *milvusDao) Search(kbID, collectionName string, vector []float32, topK int) ([]model.Chunk, error) {
 	// 构建搜索参数
 	sp, _ := entity.NewIndexIvfFlatSearchParam(config.GetConfig().Milvus.Nprobe)
 	expr := fmt.Sprintf("%s == \"%s\"", consts.FieldNameKBID, kbID)
@@ -296,10 +297,10 @@ func (m *milvusDao) Search(kbID string, vector []float32, topK int) ([]model.Chu
 	// 执行搜索
 	searchResult, err := m.mv.Search(
 		context.Background(),
-		consts.CollectionNameTextChunks, // 集合名称：指定要搜索的Milvus集合
-		[]string{},                      // 分区名称：空表示搜索所有分区
-		expr,                            // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
-		consts.SearchFields,             // 输出字段：指定返回结果中包含哪些字段
+		collectionName,      // 集合名称：指定要搜索的Milvus集合
+		[]string{},          // 分区名称：空表示搜索所有分区
+		expr,                // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
+		consts.SearchFields, // 输出字段：指定返回结果中包含哪些字段
 		[]entity.Vector{entity.FloatVector(vector)}, // 查询向量：将输入向量转换为Milvus向量格式
 		consts.FieldNameVector,                      // 向量字段名：指定在哪个字段上执行向量搜索
 		config.GetConfig().Milvus.GetMetricType(),   // 度量类型：如何计算向量相似度（如余弦相似度、欧几里得距离等）

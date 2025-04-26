@@ -1,9 +1,9 @@
 package service
 
 import (
+	"ai-cloud/internal/model"
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"ai-cloud/config"
@@ -18,6 +18,52 @@ type EmbeddingService interface {
 
 	// GetDimension 返回嵌入向量的维度
 	GetDimension() int
+}
+
+// EmbeddingFactory 用于创建embedding服务实例
+type EmbeddingFactory interface {
+	CreateEmbedder(ctx context.Context, modelConfig *model.Model) (EmbeddingService, error)
+}
+
+// 具体的工厂实现
+type OpenAIEmbeddingFactory struct{}
+
+func (f *OpenAIEmbeddingFactory) CreateEmbedder(ctx context.Context, modelConfig *model.Model) (EmbeddingService, error) {
+	embedder, err := openai.NewEmbedder(ctx, &openai.EmbeddingConfig{
+		APIKey:     modelConfig.APIKey,
+		Model:      modelConfig.ModelName,
+		BaseURL:    modelConfig.BaseURL,
+		Timeout:    30 * time.Second,
+		Dimensions: &modelConfig.Dimension,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("创建OpenAI嵌入服务失败: %w", err)
+	}
+
+	return &OpenAIEmbeddingService{
+		embedder:  embedder,
+		dimension: modelConfig.Dimension,
+	}, nil
+}
+
+type OllamaEmbeddingFactory struct{}
+
+func (f *OllamaEmbeddingFactory) CreateEmbedder(ctx context.Context, modelConfig *model.Model) (EmbeddingService, error) {
+	embedder, err := ollama.NewOllamaEmbedder(ctx, &ollama.OllamaEmbeddingConfig{
+		BaseURL:    modelConfig.BaseURL,
+		Model:      modelConfig.ModelName,
+		Dimensions: &modelConfig.Dimension,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("创建Ollama嵌入服务失败: %w", err)
+	}
+
+	return &OllamaEmbeddingService{
+		embedder:  embedder,
+		dimension: modelConfig.Dimension,
+	}, nil
 }
 
 // OpenAIEmbeddingService 使用OpenAI API的嵌入服务
@@ -72,6 +118,26 @@ func (s *OpenAIEmbeddingService) GetDimension() int {
 	return s.dimension
 }
 
+// CreateEmbedder 根据模型配置创建embedder实例
+func (s *OpenAIEmbeddingService) CreateEmbedder(ctx context.Context, modelConfig *model.Model) (EmbeddingService, error) {
+	embedder, err := openai.NewEmbedder(ctx, &openai.EmbeddingConfig{
+		APIKey:     modelConfig.APIKey,
+		Model:      modelConfig.ModelName,
+		BaseURL:    modelConfig.BaseURL,
+		Timeout:    30 * time.Second,
+		Dimensions: &modelConfig.Dimension,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("创建OpenAI嵌入服务失败: %w", err)
+	}
+
+	return &OpenAIEmbeddingService{
+		embedder:  embedder,
+		dimension: modelConfig.Dimension,
+	}, nil
+}
+
 // NewOllamaEmbeddingService 创建Ollama嵌入服务实例
 func NewOllamaEmbeddingService(ctx context.Context) (*OllamaEmbeddingService, error) {
 	cfg := config.GetConfig().Embedding.Ollama
@@ -82,7 +148,7 @@ func NewOllamaEmbeddingService(ctx context.Context) (*OllamaEmbeddingService, er
 
 	fmt.Println("创建Ollama嵌入服务:", ollamaURL, "模型:", ollamaModel)
 
-	embedder, err := ollama.NewOllamaEmbedderEmbedder(ctx, &ollama.OllamaEmbeddingConfig{
+	embedder, err := ollama.NewOllamaEmbedder(ctx, &ollama.OllamaEmbeddingConfig{
 		BaseURL:    ollamaURL,
 		Model:      ollamaModel,
 		Dimensions: &dimension,
@@ -108,16 +174,33 @@ func (s *OllamaEmbeddingService) GetDimension() int {
 	return s.dimension
 }
 
-// NewEmbeddingService 工厂函数，根据配置创建合适的嵌入服务
-func NewEmbeddingService(ctx context.Context) (EmbeddingService, error) {
-	embeddingType := strings.ToLower(config.GetConfig().Embedding.Service)
+func (s *OllamaEmbeddingService) CreateEmbedder(ctx context.Context, modelConfig *model.Model) (EmbeddingService, error) {
+	embedder, err := ollama.NewOllamaEmbedder(ctx, &ollama.OllamaEmbeddingConfig{
+		BaseURL:    modelConfig.BaseURL,
+		Model:      modelConfig.ModelName,
+		Dimensions: &modelConfig.Dimension,
+	})
 
-	switch embeddingType {
-	case "ollama":
-		return NewOllamaEmbeddingService(ctx)
-	case "remote", "openai", "":
-		return NewOpenAIEmbeddingService(ctx)
-	default:
-		return NewOpenAIEmbeddingService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("创建Ollama嵌入服务失败: %w", err)
 	}
+
+	return &OllamaEmbeddingService{
+		embedder:  embedder,
+		dimension: modelConfig.Dimension,
+	}, nil
 }
+
+//// NewEmbeddingService 工厂函数，根据配置创建合适的嵌入服务
+//func NewEmbeddingService(ctx context.Context) (EmbeddingService, error) {
+//	embeddingType := strings.ToLower(config.GetConfig().Embedding.Service)
+//
+//	switch embeddingType {
+//	case "ollama":
+//		return NewOllamaEmbeddingService(ctx)
+//	case "remote", "openai", "":
+//		return NewOpenAIEmbeddingService(ctx)
+//	default:
+//		return NewOpenAIEmbeddingService(ctx)
+//	}
+//}
