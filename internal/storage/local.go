@@ -40,10 +40,6 @@ func (s *LocalStorage) Download(key string) ([]byte, error) {
 func (s *LocalStorage) Delete(key string) error {
 	fullPath := filepath.Join(s.baseDir, key)
 	return os.Remove(fullPath)
-	//if err := os.Remove(fullPath); err == nil {
-	//	return nil
-	//}
-	//return os.RemoveAll(fullPath)
 }
 
 // GetURL 获取本地文件路径（仅返回相对路径）

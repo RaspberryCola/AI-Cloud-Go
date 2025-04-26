@@ -8,7 +8,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// InitDB 初始化数据库连接
 func InitDB() (*gorm.DB, error) {
+	// 构造 DSN
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		config.AppConfigInstance.Database.User,
 		config.AppConfigInstance.Database.Password,
@@ -17,12 +19,13 @@ func InitDB() (*gorm.DB, error) {
 		config.AppConfigInstance.Database.Name,
 	)
 
+	// 连接数据库
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	// 自动迁移
+	// 自动迁移, 创建表结构
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.File{},

@@ -16,35 +16,31 @@ import (
 	"time"
 )
 
-// MilvusDao 向量数据库访问接口
 type MilvusDao interface {
-	// CreateCollection 创建集合
+	// 创建集合
 	CreateCollection(ctx context.Context, collectionName string, dimension int) error
 
-	// SaveChunks 保存文本块到向量数据库
+	// 保存文本块到向量数据库
 	SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk, dimension int) error
 
-	// Search 在知识库中搜索相似向量，返回相似度排序后的文本块
+	// 在知识库中搜索相似向量，返回相似度排序后的文本块
 	Search(kbID, collectionName string, vector []float32, topK int) ([]model.Chunk, error)
 
-	// DeleteChunks 删除指定文档的所有文本块
+	// 删除指定文档的所有文本块
 	DeleteChunks(docIDs []string, collectionName string) error
 }
 
-// milvusDao 是 MilvusDao 接口的实现
 type milvusDao struct {
 	mv client.Client // Milvus客户端
 }
 
-// NewMilvusDao 创建一个新的MilvusDao实例
 func NewMilvusDao(milvus client.Client) MilvusDao {
 	return &milvusDao{mv: milvus}
 }
 
-// 新增函数：根据模型信息创建collection
+// 根据collectionNam和dimension信息创建集合
 func (m *milvusDao) CreateCollection(ctx context.Context, collectionName string, dimension int) error {
-	milvusConfig := config.GetConfig().Milvus
-
+	//  检查集合是否存在
 	exists, err := m.mv.HasCollection(ctx, collectionName)
 	if err != nil {
 		return fmt.Errorf("检查集合存在失败: %w", err)
@@ -54,7 +50,10 @@ func (m *milvusDao) CreateCollection(ctx context.Context, collectionName string,
 		return nil
 	}
 
-	// 创建集合
+	// 获取 Milvus 配置
+	milvusConfig := config.GetConfig().Milvus
+
+	// 创建集合Schema
 	schema := &entity.Schema{
 		CollectionName: collectionName,
 		Description:    "存储文档分块和向量",
@@ -111,6 +110,7 @@ func (m *milvusDao) CreateCollection(ctx context.Context, collectionName string,
 		},
 	}
 
+	// 创建集合
 	if err := m.mv.CreateCollection(ctx, schema, 1); err != nil {
 		return fmt.Errorf("创建集合失败: %w", err)
 	}
@@ -239,14 +239,6 @@ func (m *milvusDao) createDataColumns(data *chunkData) []entity.Column {
 }
 
 // insertDataWithRetry 尝试插入数据，失败时自动重试
-// 参数:
-//   - collectionName: 目标集合名称
-//   - columns: 要插入的数据列
-//   - maxRetries: 最大重试次数
-//
-// 返回:
-//   - 如果所有重试都失败，返回包含所有错误的多重错误
-//   - 如果成功，返回nil
 func (m *milvusDao) insertDataWithRetry(ctx context.Context, collectionName string, columns []entity.Column, maxRetries int) error {
 	var result *multierror.Error
 	baseDelay := 100 * time.Millisecond
@@ -282,14 +274,6 @@ func (m *milvusDao) DeleteChunks(docIDs []string, collectionName string) error {
 }
 
 // Search 在知识库中搜索相似向量
-// 参数:
-//   - kbID: 知识库ID，指定搜索范围
-//   - vector: 查询向量，通常是问题或查询文本的嵌入表示
-//   - topK: 返回的最相似结果数量
-//
-// 返回:
-//   - 按相似度排序的文本块切片
-//   - 可能的错误
 func (m *milvusDao) Search(kbID, collectionName string, vector []float32, topK int) ([]model.Chunk, error) {
 	// 构建搜索参数
 	sp, _ := entity.NewIndexIvfFlatSearchParam(config.GetConfig().Milvus.Nprobe)
@@ -315,12 +299,6 @@ func (m *milvusDao) Search(kbID, collectionName string, vector []float32, topK i
 }
 
 // parseSearchResults 解析搜索结果，将Milvus返回结果转换为模型数据
-// 参数:
-//   - searchResult: Milvus搜索结果
-//
-// 返回:
-//   - 解析后的文本块切片，按相似度得分降序排序
-//   - 可能的错误
 func (m *milvusDao) parseSearchResults(searchResult []client.SearchResult) ([]model.Chunk, error) {
 	var chunks []model.Chunk
 	log.Printf("SearchResult长度：%v\n", len(searchResult))

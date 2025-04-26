@@ -20,6 +20,7 @@ func NewUserDao(db *gorm.DB) UserDao {
 	return &userDao{db: db}
 }
 
+// CheckFieldExists 检查字段是否存在
 func (ud *userDao) CheckFieldExists(field string, value interface{}) (bool, error) {
 	var count int64
 	if err := ud.db.Model(&model.User{}).Where(field+" = ?", value).Count(&count).Error; err != nil {

@@ -146,33 +146,6 @@ type RAGConfig struct {
 	OverlapSize int `mapstructure:"overlap_size"`
 }
 
-//// EmbeddingConfig 嵌入模型配置
-//type EmbeddingConfig struct {
-//	// 使用哪种嵌入模型: remote 或 ollama
-//	Service string `mapstructure:"service"`
-//
-//	// 远程嵌入模型配置（如OpenAI API）
-//	Remote RemoteEmbeddingConfig `mapstructure:"remote"`
-//
-//	// Ollama嵌入模型配置
-//	Ollama OllamaEmbeddingConfig `mapstructure:"ollama"`
-//}
-//
-//// RemoteEmbeddingConfig 远程嵌入模型配置
-//type RemoteEmbeddingConfig struct {
-//	APIKey    string `mapstructure:"api_key"`
-//	Model     string `mapstructure:"model"`
-//	BaseURL   string `mapstructure:"base_url"`
-//	Dimension int    `mapstructure:"dimension"`
-//}
-//
-//// OllamaEmbeddingConfig Ollama嵌入模型配置
-//type OllamaEmbeddingConfig struct {
-//	URL       string `mapstructure:"url"`
-//	Model     string `mapstructure:"model"`
-//	Dimension int    `mapstructure:"dimension"`
-//}
-
 // LLMConfig 语言模型配置
 type LLMConfig struct {
 	APIKey      string  `mapstructure:"api_key"`
@@ -190,7 +163,6 @@ type AppConfig struct {
 	Storage  StorageConfig  `mapstructure:"storage"`
 	CORS     CORSConfig     `mapstructure:"cors"`
 	RAG      RAGConfig      `mapstructure:"rag"`
-	//Embedding EmbeddingConfig `mapstructure:"embedding"`
-	LLM    LLMConfig    `mapstructure:"llm"`
-	Milvus MilvusConfig `mapstructure:"milvus"`
+	LLM      LLMConfig      `mapstructure:"llm"`
+	Milvus   MilvusConfig   `mapstructure:"milvus"`
 }

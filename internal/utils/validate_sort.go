@@ -10,9 +10,6 @@ func ValidateSortParameter(sort string, allowedFields []string) error {
 
 	for _, clause := range clauses {
 		parts := strings.Split(clause, ":")
-		//if len(parts) != 2 {
-		//	return fmt.Errorf("无效的排序参数")
-		//}
 		field, order := parts[0], parts[1]
 		if !contains(allowedFields, field) {
 			return fmt.Errorf("无效的排序字段：%s", field)

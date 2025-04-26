@@ -134,7 +134,7 @@ func (ks *kbService) CreateKB(userID uint, name, description, embedModelID strin
 		MilvusCollection: collectionName,
 	}
 
-	// 创建milvus collection
+	// 创建milvus collection（如果已经存在，不会重复创建）
 	if err := ks.milvusDao.CreateCollection(context.Background(), collectionName, dimension); err != nil {
 		return errors.New("创建milvus collection失败: " + err.Error())
 	}
