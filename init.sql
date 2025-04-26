@@ -1,4 +1,4 @@
-CREATE DATABASE IF NOT EXISTS ai_cloud;
+CREATE DATABASE IF NOT EXISTS `ai_cloud`;
 USE ai_cloud;
 
 -- You can add more initialization steps here if needed, such as:

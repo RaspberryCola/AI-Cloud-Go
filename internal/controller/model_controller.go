@@ -3,6 +3,7 @@ package controller
 import (
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/service"
+	"ai-cloud/internal/utils"
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
 	"fmt"
@@ -26,12 +27,13 @@ func (c *ModelController) CreateModel(ctx *gin.Context) {
 	}
 
 	m := &model.Model{
-		Type:    req.Type,
-		Name:    req.Name,
-		Server:  req.Server,
-		BaseURL: req.BaseURL,
-		Model:   req.Model,
-		APIKey:  req.APIKey,
+		ID:        utils.GenerateUUID(),
+		Type:      req.Type,
+		ShowName:  req.ShowName,
+		Server:    req.Server,
+		BaseURL:   req.BaseURL,
+		ModelName: req.ModelName,
+		APIKey:    req.APIKey,
 		// embedding
 		Dimension: req.Dimension,
 		// llm
@@ -60,13 +62,13 @@ func (c *ModelController) UpdateModel(ctx *gin.Context) {
 	}
 
 	m := &model.Model{
-		ID:      id,
-		Type:    req.Type,
-		Name:    req.Name,
-		Server:  req.Server,
-		BaseURL: req.BaseURL,
-		Model:   req.Model,
-		APIKey:  req.APIKey,
+		ID:        id,
+		Type:      req.Type,
+		ShowName:  req.ShowName,
+		Server:    req.Server,
+		BaseURL:   req.BaseURL,
+		ModelName: req.ModelName,
+		APIKey:    req.APIKey,
 		// embedding
 		Dimension: req.Dimension,
 		// llm

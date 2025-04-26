@@ -38,7 +38,7 @@ func (kc *KBController) Create(ctx *gin.Context) {
 	}
 
 	if err := kc.kbService.CreateKB(userID, req.Name, req.Description, req.EmbedModelID); err != nil {
-		response.InternalError(ctx, errcode.InternalServerError, "创建失败")
+		response.InternalError(ctx, errcode.InternalServerError, "创建失败: "+err.Error())
 		return
 	}
 
@@ -229,11 +229,8 @@ func (kc *KBController) Retrieve(ctx *gin.Context) {
 	}
 
 	// 2. 解析请求参数
-	var req struct {
-		KBID  string `json:"kb_id"`
-		Query string `json:"query"`
-		TopK  int    `json:"top_k"`
-	}
+	var req model.RetrieveRequest
+
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.ParamError(ctx, errcode.ParamBindError, "参数错误")
 		return

@@ -55,3 +55,9 @@ type CreateKBRequest struct {
 	Description  string `json:"description"`
 	EmbedModelID string `json:"embed_model_id" binding:"required"`
 }
+
+type RetrieveRequest struct {
+	KBID  string `json:"kb_id"`
+	Query string `json:"query"`
+	TopK  int    `json:"top_k"`
+}

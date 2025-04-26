@@ -110,7 +110,14 @@ func getEnvWithDefault(key, defaultValue string) string {
 
 func (ks *kbService) CreateKB(userID uint, name, description, embedModelID string) error {
 
-	collectionName := fmt.Sprintf("kb_%s", embedModelID)
+	embedModel, err := ks.modelDao.GetByID(context.Background(), embedModelID)
+	if err != nil {
+		return errors.New("embedding model not found")
+	}
+	dimension := embedModel.Dimension
+
+	collectionName := fmt.Sprintf("embed_%s", embedModelID)
+	collectionName = strings.ReplaceAll(collectionName, "-", "_")
 
 	kb := &model.KnowledgeBase{
 		ID:               GenerateUUID(),
@@ -121,16 +128,9 @@ func (ks *kbService) CreateKB(userID uint, name, description, embedModelID strin
 		MilvusCollection: collectionName,
 	}
 
-	embedModel, err := ks.modelDao.GetByID(context.Background(), embedModelID)
-	if err != nil {
-		return errors.New("embedding model not found")
-	}
-
-	dimension := embedModel.Dimension
-
 	// 创建milvus collection
 	if err := ks.milvusDao.CreateCollection(context.Background(), collectionName, dimension); err != nil {
-		return errors.New("创建milvus collection失败")
+		return errors.New("创建milvus collection失败: " + err.Error())
 	}
 
 	// 保存知识库记录
