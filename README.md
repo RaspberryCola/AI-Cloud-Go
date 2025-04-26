@@ -87,26 +87,9 @@ go run cmd/main.go
 ## 启动步骤
 
 1. 环境配置
-   - 修改 `config/config.yaml` 文件，配置各服务连接信息和AI模型API密钥
+   - 修改 `config/config.yaml` 文件，配置各服务连接信息和LLM的API密钥信息
    ```yaml
-   # 嵌入模型配置
-   embedding:
-     service: "remote" # remote 或 ollama
-     remote:
-       api_key: "sk-your-api-key"
-       model: "text-embedding-3-large"
-       base_url: "https://api.openai.com/v1"
-     
-     # Ollama嵌入模型配置
-     ollama:
-       url: "http://localhost:11434"
-       model: "mxbai-embed-large"
-
-   # Milvus向量数据库配置
-   milvus:
-     address: "localhost:19530"
-     
-   # 语言模型配置
+   # 语言模型配置（后续移动到统一的模型服务管理中）
    llm:
      api_key: "your-llm-api-key"
      model: "deepseek-chat"
@@ -160,15 +143,11 @@ go run cmd/main.go
 ### 环境配置
 项目使用 `config/config.yaml` 文件配置服务连接和第三方 AI 模型的访问，主要包括：
 
-1. **嵌入模型配置**
-   - 支持远程API服务（如OpenAI）和Ollama本地Embedding模型
-   - 详见 [EMBEDDING_CONFIG_README.md](./EMBEDDING_CONFIG_README.md)
-
-2. **语言模型配置**
+1.**语言模型配置**
    - 用于知识库问答和智能处理
    - 默认使用 DeepSeek 的 deepseek-chat 模型
 
-3. **Milvus配置**
+2.**Milvus配置**
    - 用于向量存储和检索
    - 配置项: `milvus.address`
 

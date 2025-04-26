@@ -47,7 +47,7 @@ type AddFileRequest struct {
 }
 
 type BatchDeleteDocsReq struct {
-	KBID   string   `json:"kbid"`
+	KBID   string   `json:"kb_id"`
 	DocIDs []string `json:"doc_ids" binding:"required"`
 }
 

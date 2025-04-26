@@ -72,8 +72,7 @@ cors:
   allow_credentials: true
   max_age: "12h"
 
-
-# 语言模型配置
+## LLM配置
 llm:
   api_key: "your-llm-api-key"
   model: "deepseek-chat"
