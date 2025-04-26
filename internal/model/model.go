@@ -51,3 +51,23 @@ type PageModelRequest struct {
 	Page int    `form:"page,default=1"`
 	Size int    `form:"size,default=10"`
 }
+
+type UpdateModelRequest struct {
+	ID string `json:"id" binding:"required"`
+	// 基础信息
+	ShowName  string `json:"name"`
+	Server    string `json:"server"`
+	BaseURL   string `json:"base_url"`
+	ModelName string `json:"model"`
+	APIKey    string `json:"api_key"`
+
+	// Embedding
+	Dimension int `json:"dimension"`
+
+	// LLM
+	MaxOutputLength int  `json:"max_output_length"`
+	Function        bool `json:"function"`
+
+	// 通用字段
+	MaxTokens int `json:"max_tokens"`
+}

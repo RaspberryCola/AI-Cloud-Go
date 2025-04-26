@@ -47,8 +47,6 @@ storage:
 # Milvus向量数据库配置
 milvus:
   address: "localhost:19530"
-  collection_name: "text_chunks"
-  vector_dimension: 1024
   index_type: "IVF_FLAT"
   metric_type: "COSINE"
   nlist: 128
@@ -61,22 +59,7 @@ milvus:
   doc_name_max_length: "256"
   kb_id_max_length: "64"
 
-# 嵌入模型配置
-embedding:
-  service: "remote" # remote 或 ollama
-  
-  # 远程嵌入模型配置（OpenAI API，当 service=remote 时使用）
-  remote:
-    api_key: "your-api-key" # 替换为您的API密钥
-    model: "text-embedding-3-large"
-    base_url: "https://api.openai.com/v1"
-  
-  # Ollama嵌入模型配置（当 service=ollama 时使用）
-  ollama:
-    url: "http://localhost:11434"
-    model: "mxbai-embed-large"
-
-# 语言模型配置
+# 语言模型配置(后续会移除到统一的模型管理中）
 llm:
   api_key: "your-llm-api-key" # 替换为您的语言模型API密钥
   model: "deepseek-chat"
@@ -152,14 +135,7 @@ docker logs milvus-standalone
    
    然后运行`chmod +x start-ollama.sh`和`./start-ollama.sh`
 
-4. 在`config/config.yaml`中设置：
-   ```yaml
-   embedding:
-     service: "ollama"
-     ollama:
-       url: "http://localhost:11434"
-       model: "mxbai-embed-large"
-   ```
+4. 在前端模型服务中添加模型：
 
 5. 验证Ollama服务是否正常运行：
    ```bash
@@ -175,8 +151,6 @@ Milvus的连接地址和向量集合参数在配置文件中指定：
 # Milvus向量数据库配置
 milvus:
   address: "localhost:19530"
-  collection_name: "text_chunks"
-  vector_dimension: 1024
   index_type: "IVF_FLAT"
   metric_type: "COSINE"
   nlist: 128
@@ -192,8 +166,6 @@ milvus:
 
 如果您使用的是自定义的Milvus部署或远程Milvus服务，请相应地修改地址。您也可以根据需要调整以下参数：
 
-- `collection_name`: 向量集合名称
-- `vector_dimension`: 向量维度，应与嵌入模型输出维度匹配
 - `index_type`: 索引类型，支持IVF_FLAT、IVF_SQ8、HNSW等
 - `metric_type`: 距离计算方式，支持COSINE、L2、IP等
 - `nlist`: IVF索引的聚类数量

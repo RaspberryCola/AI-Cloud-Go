@@ -37,7 +37,14 @@ func (d *modelDao) Update(ctx context.Context, m *model.Model) error {
 	if count == 0 {
 		return errors.New("模型不存在或无权限")
 	}
-	return d.db.WithContext(ctx).Save(m).Error
+
+	// 只更新允许修改的字段，排除CreatedAt
+	return d.db.WithContext(ctx).Model(m).
+		Select(
+			"ShowName", "Server", "BaseURL", "ModelName", "APIKey",
+			"Dimension", "MaxOutputLength", "Function", "MaxTokens",
+		).
+		Updates(m).Error
 }
 
 func (d *modelDao) Delete(ctx context.Context, userID uint, id string) error {

@@ -1,15 +1,5 @@
 # AI-Cloud-Go 配置指南
 
-## 配置迁移说明
-
-我们已将项目的所有配置从环境变量(`.env`文件)迁移到YAML配置文件(`config/config.yaml`)中，以统一配置管理方式，提高可维护性。
-
-### 主要变更
-
-1. 将嵌入模型(Embedding)相关配置从环境变量迁移到YAML配置
-2. 将语言模型(LLM)相关配置从环境变量迁移到YAML配置
-3. 更新了相关服务实现，使用配置文件而非环境变量
-
 ### 配置文件结构
 
 配置文件(`config/config.yaml`)结构如下：
@@ -49,8 +39,6 @@ storage:
 # Milvus向量数据库配置
 milvus:
   address: "localhost:19530"  # Milvus服务地址
-  collection_name: "text_chunks"  # 向量集合名称
-  vector_dimension: 1024  # 向量维度
   index_type: "IVF_FLAT"  # 索引类型 (IVF_FLAT, IVF_SQ8, HNSW)
   metric_type: "COSINE"  # 距离计算方式 (COSINE, L2, IP)
   nlist: 128  # IVF索引聚类数量
@@ -70,29 +58,7 @@ rag:
 cors:
   # CORS配置...
 
-# 嵌入模型配置
-embedding:
-  service: "ollama" # remote, local, ollama
-
-  # 远程嵌入模型配置（OpenAI API，当 service=remote 时使用）
-  remote:
-    api_key: "your-api-key"
-    model: "text-embedding-3-large"
-    base_url: "https://api.openai.com/v1"
-
-  # 本地FastAPI嵌入模型配置（当 service=local 时使用）
-  local:
-    url: "http://embedding-api:8000"
-    url_host: "http://localhost:8008"
-    model: "paraphrase-multilingual-MiniLM-L12-v2"
-    dimension: 384
-
-  # Ollama嵌入模型配置（当 service=ollama 时使用）
-  ollama:
-    url: "http://localhost:11434"
-    model: "mxbai-embed-large"
-
-# 语言模型配置
+# 语言模型配置（后续移除，通过统一的模块管理）
 llm:
   api_key: "your-llm-api-key"
   model: "deepseek-chat"
@@ -133,8 +99,6 @@ func main() {
 # Milvus向量数据库配置
 milvus:
   address: "localhost:19530"  # Milvus服务地址
-  collection_name: "text_chunks"  # 向量集合名称
-  vector_dimension: 1024  # 向量维度
   index_type: "IVF_FLAT"  # 索引类型 (IVF_FLAT, IVF_SQ8, HNSW)
   metric_type: "COSINE"  # 距离计算方式 (COSINE, L2, IP)
   nlist: 128  # IVF索引聚类数量
@@ -158,50 +122,8 @@ milvusClient, err := client.NewClient(ctx, client.Config{
 
 // 使用配置创建集合
 milvusConfig := config.GetConfig().Milvus
-collectionName := milvusConfig.CollectionName
-vectorDim := milvusConfig.VectorDimension
+address := milvusConfig.Address
 // ...
-```
-
-## 嵌入服务配置
-
-### 远程API服务 (OpenAI)
-
-使用 OpenAI API 进行文本向量嵌入：
-
-```yaml
-embedding:
-  service: "remote"
-  remote:
-    api_key: "your-api-key"
-    model: "text-embedding-3-large"
-    base_url: "https://api.openai.com/v1"
-```
-
-### 本地FastAPI服务
-
-使用本地部署的FastAPI服务进行文本向量嵌入：
-
-```yaml
-embedding:
-  service: "local"
-  local:
-    url: "http://embedding-api:8000"  # Docker网络内部地址
-    url_host: "http://localhost:8008" # 宿主机访问地址
-    model: "paraphrase-multilingual-MiniLM-L12-v2"
-    dimension: 384
-```
-
-### Ollama本地服务
-
-使用Ollama本地服务进行文本向量嵌入：
-
-```yaml
-embedding:
-  service: "ollama"
-  ollama:
-    url: "http://localhost:11434"
-    model: "mxbai-embed-large"
 ```
 
 ## 语言模型配置
@@ -223,16 +145,6 @@ llm:
 
 | 环境变量 | 配置文件路径 |
 |---------|------------|
-| `EMBEDDING_SERVICE` | `embedding.service` |
-| `EMBEDDING_API_KEY` | `embedding.remote.api_key` |
-| `EMBEDDING_MODEL` | `embedding.remote.model` |
-| `EMBEDDING_BASE_URL` | `embedding.remote.base_url` |
-| `LOCAL_EMBEDDING_URL` | `embedding.local.url` |
-| `LOCAL_EMBEDDING_URL_HOST` | `embedding.local.url_host` |
-| `LOCAL_EMBEDDING_MODEL` | `embedding.local.model` |
-| `LOCAL_EMBEDDING_DIM` | `embedding.local.dimension` |
-| `OLLAMA_URL` | `embedding.ollama.url` |
-| `OLLAMA_EMBEDDING_MODEL` | `embedding.ollama.model` |
 | `LLM_API_KEY` | `llm.api_key` |
 | `LLM_MODEL` | `llm.model` |
 | `LLM_BASE_URL` | `llm.base_url` |

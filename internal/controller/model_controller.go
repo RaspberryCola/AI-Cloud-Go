@@ -68,17 +68,15 @@ func (c *ModelController) UpdateModel(ctx *gin.Context) {
 		return
 	}
 
-	id := ctx.Param("id")
-	var req model.CreateModelRequest
+	var req model.UpdateModelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.ParamError(ctx, errcode.ParamBindError, "参数错误:"+err.Error())
 		return
 	}
 
 	m := &model.Model{
-		ID:        id,
+		ID:        req.ID,
 		UserID:    userID,
-		Type:      req.Type,
 		ShowName:  req.ShowName,
 		Server:    req.Server,
 		BaseURL:   req.BaseURL,
@@ -107,7 +105,7 @@ func (c *ModelController) DeleteModel(ctx *gin.Context) {
 		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
 		return
 	}
-	kbID := ctx.Query("kb_id")
+	kbID := ctx.Query("model_id")
 
 	if err := c.svc.DeleteModel(ctx.Request.Context(), userID, kbID); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "删除模型失败："+err.Error())
@@ -127,12 +125,12 @@ func (c *ModelController) GetModel(ctx *gin.Context) {
 
 	modelID := ctx.Query("model_id")
 
-	model, err := c.svc.GetModel(ctx.Request.Context(), userID, modelID)
+	m, err := c.svc.GetModel(ctx.Request.Context(), userID, modelID)
 	if err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "获取模型失败："+err.Error())
 		return
 	}
-	response.SuccessWithMessage(ctx, "获取模型成功", model)
+	response.SuccessWithMessage(ctx, "获取模型成功", m)
 }
 
 func (c *ModelController) PageModels(ctx *gin.Context) {
