@@ -34,8 +34,8 @@ storage:
 # Milvus向量数据库配置
 milvus:
   address: "localhost:19530"
-  collection_name: "text_chunks"
-  vector_dimension: 1024
+  # collection_name: "text_chunks"
+  # vector_dimension: 1024
   index_type: "IVF_FLAT"
   metric_type: "COSINE"
   nlist: 128
@@ -72,20 +72,6 @@ cors:
   allow_credentials: true
   max_age: "12h"
 
-# 嵌入模型配置
-embedding:
-  service: "remote" # remote 或 ollama
-
-  # 远程嵌入模型配置（OpenAI API，当 service=remote 时使用）
-  remote:
-    api_key: "sk-your-api-key"
-    model: "text-embedding-3-large"
-    base_url: "https://api.openai.com/v1"
-
-  # Ollama嵌入模型配置（当 service=ollama 时使用）
-  ollama:
-    url: "http://localhost:11434"
-    model: "mxbai-embed-large"
 
 # 语言模型配置
 llm:

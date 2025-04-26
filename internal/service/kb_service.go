@@ -38,7 +38,7 @@ type KBService interface {
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)    // 添加File到知识库
 	ProcessDocument(kbID string, doc *model.Document) error                                // 解析嵌入文档（后续需要细化）
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
-	DeleteDocs(userID uint, docs []string) error                                           // 批量删除文件
+	DeleteDocs(userID uint, kbID string, docs []string) error                              // 批量删除文件
 
 	// RAG
 	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)                                        // 获取检索的Chunks
@@ -156,6 +156,8 @@ func (ks *kbService) DeleteKB(userID uint, kbID string) error {
 		return errors.New("无权限删除该知识库")
 	}
 
+	collectionName := kb.MilvusCollection
+
 	// 2. 获取知识库下的所有文档
 	docs, err := ks.kbDao.GetAllDocsByKBID(kbID)
 	if err != nil {
@@ -181,7 +183,7 @@ func (ks *kbService) DeleteKB(userID uint, kbID string) error {
 	}()
 
 	if len(docIDs) > 0 {
-		if err := ks.milvusDao.DeleteChunks(docIDs); err != nil {
+		if err := ks.milvusDao.DeleteChunks(docIDs, collectionName); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("删除向量数据失败: %w", err)
 		}
@@ -368,7 +370,7 @@ func (ks *kbService) ProcessDocument(kbID string, doc *model.Document) error {
 	}
 
 	// 4. 将 chunks 存储到 Milvus
-	if err := ks.milvusDao.SaveChunks(ctx, kb.MilvusCollection, chunks); err != nil {
+	if err := ks.milvusDao.SaveChunks(ctx, kb.MilvusCollection, chunks, embedModel.Dimension); err != nil {
 		return fmt.Errorf("存储向量到 Milvus 失败: %w", err)
 	}
 
@@ -624,7 +626,13 @@ func (ks *kbService) GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase
 	return kb, nil
 }
 
-func (ks *kbService) DeleteDocs(userID uint, docIDs []string) error {
+func (ks *kbService) DeleteDocs(userID uint, kbID string, docIDs []string) error {
+
+	kb, err := ks.kbDao.GetKBByID(kbID)
+	if err != nil {
+		return fmt.Errorf("获取知识库失败：%v", err)
+	}
+	collectionName := kb.MilvusCollection
 	// 开启事务
 	tx := ks.kbDao.GetDB().Begin()
 	if tx.Error != nil {
@@ -638,7 +646,7 @@ func (ks *kbService) DeleteDocs(userID uint, docIDs []string) error {
 	}()
 
 	if len(docIDs) > 0 {
-		if err := ks.milvusDao.DeleteChunks(docIDs); err != nil {
+		if err := ks.milvusDao.DeleteChunks(docIDs, collectionName); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("删除向量数据失败：%w", err)
 		}

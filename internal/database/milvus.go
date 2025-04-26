@@ -18,9 +18,9 @@ func InitMilvus(ctx context.Context) (client.Client, error) {
 		return nil, fmt.Errorf("无法连接到Milvus: %w", err)
 	}
 	// 初始化文本chunks集合
-	if err := initTextChunksCollection(ctx, milvusClient); err != nil {
-		return nil, fmt.Errorf("初始化集合失败: %w", err)
-	}
+	//if err := initTextChunksCollection(ctx, milvusClient); err != nil {
+	//	return nil, fmt.Errorf("初始化集合失败: %w", err)
+	//}
 	return milvusClient, nil
 }
 

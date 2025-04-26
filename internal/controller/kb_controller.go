@@ -350,13 +350,14 @@ func (kc *KBController) DeleteDocs(ctx *gin.Context) {
 	}
 
 	docIDs := req.DocIDs
+	kbID := req.KBID
 
 	if len(docIDs) == 0 {
 		response.SuccessWithMessage(ctx, "删除知识库成功", nil)
 		return
 	}
 
-	if err := kc.kbService.DeleteDocs(userID, docIDs); err != nil {
+	if err := kc.kbService.DeleteDocs(userID, kbID, docIDs); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "删除文档失败")
 		return
 	}

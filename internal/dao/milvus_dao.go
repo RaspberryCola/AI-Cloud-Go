@@ -18,16 +18,17 @@ import (
 
 // MilvusDao 向量数据库访问接口
 type MilvusDao interface {
+	// CreateCollection 创建集合
 	CreateCollection(ctx context.Context, collectionName string, dimension int) error
 
 	// SaveChunks 保存文本块到向量数据库
-	SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk) error
+	SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk, dimension int) error
 
 	// Search 在知识库中搜索相似向量，返回相似度排序后的文本块
 	Search(kbID, collectionName string, vector []float32, topK int) ([]model.Chunk, error)
 
 	// DeleteChunks 删除指定文档的所有文本块
-	DeleteChunks(docIDs []string) error
+	DeleteChunks(docIDs []string, collectionName string) error
 }
 
 // milvusDao 是 MilvusDao 接口的实现
@@ -135,14 +136,14 @@ func (m *milvusDao) CreateCollection(ctx context.Context, collectionName string,
 // SaveChunks 保存文本块到Milvus向量数据库
 // 该方法会过滤掉无效的文本块，然后将有效的文本块插入到向量数据库中
 // 如果插入失败，会自动重试指定次数
-func (m *milvusDao) SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk) error {
+func (m *milvusDao) SaveChunks(ctx context.Context, collectionName string, chunks []model.Chunk, dimension int) error {
 	if len(chunks) == 0 {
 		return fmt.Errorf("num_rows should be greater than 0: invalid parameter[expected=invalid num_rows][actual=0")
 	}
 	fmt.Printf("SaveChunks: 准备插入%d个文本块\n", len(chunks))
 
 	// 准备有效的数据
-	preparedData, err := m.prepareChunkData(chunks)
+	preparedData, err := m.prepareChunkData(chunks, collectionName, dimension)
 	if err != nil {
 		return err
 	}
@@ -171,11 +172,11 @@ type chunkData struct {
 // prepareChunkData 验证和准备文本块数据
 // 该方法会过滤掉无效的文本块（空内容或空向量），并确保文档名不超过最大长度限制
 // 返回处理后的数据结构和可能的错误
-func (m *milvusDao) prepareChunkData(chunks []model.Chunk) (*chunkData, error) {
-	milvusConfig := config.GetConfig().Milvus
+func (m *milvusDao) prepareChunkData(chunks []model.Chunk, collectionName string, dimension int) (*chunkData, error) {
+
 	data := &chunkData{
-		collectionName: consts.CollectionNameTextChunks,
-		vectorDim:      milvusConfig.VectorDimension,
+		collectionName: collectionName,
+		vectorDim:      dimension,
 	}
 
 	// 遍历验证并准备数据
@@ -270,11 +271,11 @@ func (m *milvusDao) insertDataWithRetry(ctx context.Context, collectionName stri
 
 // DeleteChunks 删除指定文档ID列表对应的所有文本块
 // 使用IN操作符构建删除表达式，一次性删除多个文档的所有块
-func (m *milvusDao) DeleteChunks(docIDs []string) error {
+func (m *milvusDao) DeleteChunks(docIDs []string, collectionName string) error {
 	// 构建删除表达式，使用 IN 操作符
 	expr := fmt.Sprintf("%s in [\"%s\"]", consts.FieldNameDocumentID, strings.Join(docIDs, "\",\""))
 	// 删除
-	if err := m.mv.Delete(context.Background(), consts.CollectionNameTextChunks, "", expr); err != nil {
+	if err := m.mv.Delete(context.Background(), collectionName, "", expr); err != nil {
 		return fmt.Errorf("删除向量数据失败：%w", err)
 	}
 	return nil
