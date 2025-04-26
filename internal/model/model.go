@@ -5,12 +5,13 @@ import "time"
 type Model struct {
 	// 基础信息
 	ID        string `gorm:"primaryKey;type:char(36)"`
-	Type      string `gorm:"not null"` // embedding/llm
+	UserID    uint   `gorm:"index"`    // 用户ID
+	Type      string `gorm:"not null"` // 模型的类型：embedding/llm
 	ShowName  string `gorm:"not null"` // 显示名称
-	Server    string `gorm:"not null"` // openai/ollama/huggingface/local
+	Server    string `gorm:"not null"` // 模型的供应商：openai/ollama
 	BaseURL   string `gorm:"not null"` // API基础地址
 	ModelName string `gorm:"not null"` // 模型标识符，例如 deepseek-chat，text-embedding-v3
-	APIKey    string // 访问密钥
+	APIKey    string // 访问密钥，ollama一般不需要
 
 	// Embedding模型字段
 	Dimension int // 向量维度(embedding必填)
@@ -43,4 +44,10 @@ type CreateModelRequest struct {
 
 	// 通用字段
 	MaxTokens int `json:"max_tokens"`
+}
+
+type PageModelRequest struct {
+	Type string `form:"type"`
+	Page int    `form:"page,default=1"`
+	Size int    `form:"size,default=10"`
 }

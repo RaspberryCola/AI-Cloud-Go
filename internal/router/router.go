@@ -57,6 +57,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			model.DELETE("/delete", mc.DeleteModel)
 			model.GET("/get", mc.GetModel)
 			model.GET("/page", mc.PageModels)
+			model.GET("/list", mc.ListModels)
 		}
 	}
 }

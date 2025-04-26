@@ -8,7 +8,6 @@ import (
 	"ai-cloud/pkgs/response"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 type ModelController struct {
@@ -20,6 +19,13 @@ func NewModelController(svc service.ModelService) *ModelController {
 }
 
 func (c *ModelController) CreateModel(ctx *gin.Context) {
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "获取用户失败")
+		return
+	}
+
 	var req model.CreateModelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.ParamError(ctx, errcode.ParamBindError, "参数错误:"+err.Error())
@@ -28,6 +34,7 @@ func (c *ModelController) CreateModel(ctx *gin.Context) {
 
 	m := &model.Model{
 		ID:        utils.GenerateUUID(),
+		UserID:    userID,
 		Type:      req.Type,
 		ShowName:  req.ShowName,
 		Server:    req.Server,
@@ -54,15 +61,23 @@ func (c *ModelController) CreateModel(ctx *gin.Context) {
 
 // TODO:修改返回格式
 func (c *ModelController) UpdateModel(ctx *gin.Context) {
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "获取用户失败")
+		return
+	}
+
 	id := ctx.Param("id")
 	var req model.CreateModelRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误:"+err.Error())
 		return
 	}
 
 	m := &model.Model{
 		ID:        id,
+		UserID:    userID,
 		Type:      req.Type,
 		ShowName:  req.ShowName,
 		Server:    req.Server,
@@ -79,51 +94,83 @@ func (c *ModelController) UpdateModel(ctx *gin.Context) {
 	}
 
 	if err := c.svc.UpdateModel(ctx.Request.Context(), m); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalError(ctx, errcode.InternalServerError, "更新模型失败："+err.Error())
 		return
 	}
-
-	ctx.JSON(http.StatusOK, m)
+	response.SuccessWithMessage(ctx, "更新模型成功", nil)
 }
 
 func (c *ModelController) DeleteModel(ctx *gin.Context) {
-	id := ctx.Param("id")
-	if err := c.svc.DeleteModel(ctx.Request.Context(), id); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "用户验证失败")
+		return
+	}
+	kbID := ctx.Query("kb_id")
+
+	if err := c.svc.DeleteModel(ctx.Request.Context(), userID, kbID); err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "删除模型失败："+err.Error())
 		return
 	}
 
-	ctx.JSON(http.StatusNoContent, nil)
+	response.SuccessWithMessage(ctx, "删除模型成功", nil)
 }
 
 func (c *ModelController) GetModel(ctx *gin.Context) {
-	id := ctx.Param("id")
-	m, err := c.svc.GetModel(ctx.Request.Context(), id)
+	// 获取用户ID并验证
+	userID, err := utils.GetUserIDFromContext(ctx)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "获取用户失败")
 		return
 	}
 
-	ctx.JSON(http.StatusOK, m)
+	modelID := ctx.Query("model_id")
+
+	model, err := c.svc.GetModel(ctx.Request.Context(), userID, modelID)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "获取模型失败："+err.Error())
+		return
+	}
+	response.SuccessWithMessage(ctx, "获取模型成功", model)
 }
 
 func (c *ModelController) PageModels(ctx *gin.Context) {
-	var req struct {
-		Type string `form:"type"`
-		Page int    `form:"page,default=1"`
-		Size int    `form:"size,default=10"`
-	}
-
-	if err := ctx.ShouldBindQuery(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "获取用户失败")
 		return
 	}
 
-	models, count, err := c.svc.PageModels(ctx.Request.Context(), req.Type, req.Page, req.Size)
+	var req model.PageModelRequest
+
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "参数错误："+err.Error())
+		return
+	}
+
+	models, count, err := c.svc.PageModels(ctx.Request.Context(), userID, req.Type, req.Page, req.Size)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalError(ctx, errcode.InternalServerError, "获取模型列表失败："+err.Error())
 		return
 	}
 
 	response.PageSuccess(ctx, models, count)
+}
+
+func (c *ModelController) ListModels(ctx *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "获取用户失败")
+		return
+	}
+
+	modelType := ctx.Query("type")
+	models, err := c.svc.ListModels(ctx.Request.Context(), userID, modelType)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "获取模型列表失败："+err.Error())
+		return
+	}
+
+	response.SuccessWithMessage(ctx, "获取模型列表成功", models)
 }

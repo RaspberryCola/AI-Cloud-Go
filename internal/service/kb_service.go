@@ -36,7 +36,7 @@ type KBService interface {
 	// 文档
 
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)    // 添加File到知识库
-	ProcessDocument(kbID string, doc *model.Document) error                                // 解析嵌入文档（后续需要细化）
+	ProcessDocument(userID uint, kbID string, doc *model.Document) error                   // 解析嵌入文档（后续需要细化）
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
 	DeleteDocs(userID uint, kbID string, docs []string) error                              // 批量删除文件
 
@@ -116,7 +116,7 @@ func getEnvWithDefault(key, defaultValue string) string {
 
 func (ks *kbService) CreateKB(userID uint, name, description, embedModelID string) error {
 
-	embedModel, err := ks.modelDao.GetByID(context.Background(), embedModelID)
+	embedModel, err := ks.modelDao.GetByID(context.Background(), userID, embedModelID)
 	if err != nil {
 		return errors.New("embedding model not found")
 	}
@@ -240,7 +240,7 @@ func (ks *kbService) CreateDocument(userID uint, kbID string, file *model.File) 
 }
 
 // 解析一个文件
-func (ks *kbService) ProcessDocument(kbID string, doc *model.Document) error {
+func (ks *kbService) ProcessDocument(userID uint, kbID string, doc *model.Document) error {
 	ctx := context.Background()
 
 	// 获取知识库信息
@@ -249,7 +249,7 @@ func (ks *kbService) ProcessDocument(kbID string, doc *model.Document) error {
 		return fmt.Errorf("获取知识库失败: %w", err)
 	}
 	// 获取嵌入模型信息
-	embedModel, err := ks.modelDao.GetByID(ctx, kb.EmbedModelID)
+	embedModel, err := ks.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
 	if err != nil {
 		return fmt.Errorf("获取嵌入模型失败: %w", err)
 	}
@@ -400,7 +400,7 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 
 	// 2. 向量化query，使用抽象的嵌入服务接口
 
-	embedModel, err := ks.modelDao.GetByID(ctx, kb.EmbedModelID)
+	embedModel, err := ks.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
 	if err != nil {
 		return nil, fmt.Errorf("获取嵌入模型失败: %w", err)
 	}
