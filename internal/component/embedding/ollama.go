@@ -97,6 +97,7 @@ func (o *ollamaEmbedder) GetType() string {
 	return ProviderOllama
 }
 
+// TODO：处理Callback
 //func (e *ollamaEmbedder) IsCallbacksEnabled() bool {
 //	return true
 //}
