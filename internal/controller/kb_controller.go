@@ -135,7 +135,11 @@ func (kc *KBController) AddExistFile(ctx *gin.Context) {
 	}
 	// 处理解析文档
 	doc.Status = 1 //正在处理文档
-	if err = kc.kbService.ProcessDocument(userID, req.KBID, doc); err != nil {
+	//if err = kc.kbService.ProcessDocument(userID, req.KBID, doc); err != nil {
+	//	response.InternalError(ctx, errcode.InternalServerError, err.Error())
+	//	return
+	//}
+	if err = kc.kbService.ProcessDocumentNew(userID, req.KBID, doc); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return
 	}

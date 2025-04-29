@@ -8,6 +8,7 @@ import (
 	"github.com/cloudwego/eino/components/indexer"
 	"github.com/cloudwego/eino/schema"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
+	"log"
 )
 
 type MilvusIndexerConfig struct {
@@ -21,55 +22,75 @@ type MilvusIndexer struct {
 	config MilvusIndexerConfig
 }
 
-func NewMilvusIndexer(indexerConfig *MilvusIndexerConfig) *MilvusIndexer {
-
+func NewMilvusIndexer(indexerConfig *MilvusIndexerConfig) (*MilvusIndexer, error) {
 	return &MilvusIndexer{
 		client: milvus.GetMilvusClient(),
 		config: *indexerConfig,
-	}
+	}, nil
 }
 
 func (m *MilvusIndexer) Store(ctx context.Context, docs []*schema.Document, opts ...indexer.Option) (ids []string, err error) {
-	co := indexer.GetCommonOptions(&indexer.Options{
+	// 如果有opts则用opts中的配置（允许在Store的时候更换Embedder配置）
+	co := indexer.GetCommonOptions(&indexer.Options{ //提供默认值选项
 		SubIndexes: nil,
 		Embedding:  m.config.Embedding,
-	})
+	}, opts...)
 
+	log.Println("[INFO] 获取embeder")
 	embedder := co.Embedding
 	if embedder == nil {
 		return nil, fmt.Errorf("[Indexer.Store] embedding not provided")
 	}
-
+	log.Println("[INFO] 获取texts")
 	// 获取文档内容部分
 	texts := make([]string, 0, len(docs))
 	for _, doc := range docs {
 		texts = append(texts, doc.Content)
 	}
 
+	log.Println("[INFO] 开始embedding")
 	// 向量化
 	//TODO: makeEmbeddingCtx?
-	vectors, err := embedder.EmbedStrings(ctx, texts)
-	if err != nil {
-		return nil, err
+	vectors := make([][]float64, len(texts)) // 预分配结果切片
+
+	for i, text := range texts {
+		// 每次只embed一个文本
+		vec, err := embedder.EmbedStrings(ctx, []string{text})
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed text at index %d: %w", i, err)
+		}
+
+		// 确保返回的向量是我们期望的单个结果
+		if len(vec) != 1 {
+			return nil, fmt.Errorf("unexpected number of vectors returned: %d", len(vec))
+		}
+
+		vectors[i] = vec[0]
 	}
+	//vectors, err := embedder.EmbedStrings(ctx, texts)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	if len(vectors) != len(docs) {
 		return nil, fmt.Errorf("[Indexer.Store] embedding vector length mismatch")
 	}
-
+	log.Println("[INFO] 开始convert")
 	rows, err := DocumentConvert(ctx, docs, vectors)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(rows)
 
 	results, err := m.client.InsertRows(ctx, m.config.Collection, "", rows)
 	if err != nil {
 		return nil, err
 	}
-	if err := m.client.Flush(ctx, m.config.Collection, false); err != nil {
-		return nil, err
-	}
-
+	//if err := m.client.Flush(ctx, m.config.Collection, false); err != nil {
+	//	return nil, err
+	//}
+	fmt.Println(results)
+	log.Println("[INFO] 存储完成")
 	ids = make([]string, results.Len())
 	for idx := 0; idx < results.Len(); idx++ {
 		ids[idx], err = results.GetAsString(idx)
@@ -91,21 +112,21 @@ func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]f
 	rows := make([]interface{}, 0, len(docs))
 
 	for _, doc := range docs {
-		kbID, err := doc.MetaData["kb_id"].(string) // 假设 kb_id 是 string 类型
-		if !err {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+		kbID, ok := doc.MetaData["kb_id"].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for kb_id")
 		}
-		docID, err := doc.MetaData["document_id"].(string)
-		if !err {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+		docID, ok := doc.MetaData["document_id"].(string)
+		if !ok {
+			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
 		}
-		docName, err := doc.MetaData["document_name"].(string)
-		if !err {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+		docName, ok := doc.MetaData["document_name"].(string)
+		if !ok {
+			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
 		}
-		chunkIndex, err := doc.MetaData["chunk_index"].(int)
-		if !err {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+		chunkIndex, ok := doc.MetaData["chunk_index"].(int)
+		if !ok {
+			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
 		}
 
 		em = append(em, defaultSchema{

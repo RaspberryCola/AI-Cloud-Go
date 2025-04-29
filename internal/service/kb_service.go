@@ -2,6 +2,7 @@ package service
 
 import (
 	"ai-cloud/config"
+	"ai-cloud/internal/component/indexer/milvus"
 	"ai-cloud/internal/component/parser/pdf"
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/model"
@@ -39,6 +40,8 @@ type KBService interface {
 	ProcessDocument(userID uint, kbID string, doc *model.Document) error                   // 解析嵌入文档（后续需要细化）
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
 	DeleteDocs(userID uint, kbID string, docs []string) error                              // 批量删除文件
+
+	ProcessDocumentNew(userID uint, kbID string, doc *model.Document) error
 
 	// RAG
 	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)                                        // 获取检索的Chunks
@@ -237,6 +240,117 @@ func (ks *kbService) CreateDocument(userID uint, kbID string, file *model.File) 
 		return nil, errors.New("知识库文档创建失败")
 	}
 	return doc, nil
+}
+
+func (ks *kbService) ProcessDocumentNew(userID uint, kbID string, doc *model.Document) error {
+	ctx := context.Background()
+	// 获取知识库信息
+	kb, err := ks.kbDao.GetKBByID(kbID)
+	if err != nil {
+		return fmt.Errorf("获取知识库失败: %w", err)
+	}
+	// 获取嵌入模型信息
+	embedModel, err := ks.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
+	if err != nil {
+		return fmt.Errorf("获取嵌入模型失败: %w", err)
+	}
+
+	factory, ok := ks.embedFactories[embedModel.Server]
+	if !ok {
+		return fmt.Errorf("不支持的embedding模型类型，目前仅支持openai和ollama: %s", embedModel.Type)
+	}
+
+	// 使用工厂创建embedding服务实例
+	embeddingService, err := factory.CreateEmbedder(context.Background(), embedModel)
+	if err != nil {
+		return fmt.Errorf("创建embedding服务实例失败: %w", err)
+	}
+	// 1. 获取File
+	//f := &model.File{}
+	f, err := ks.fileService.GetFileByID(doc.FileID)
+	if err != nil {
+		return fmt.Errorf("获取文件失败: %w", err)
+	}
+
+	fURL, _ := ks.storageDriver.GetURL(f.StorageKey)
+	fmt.Println("处理文档:", f.Name, "URL:", fURL)
+
+	ext := strings.ToLower(filepath.Ext(f.Name))
+	fmt.Println("文件扩展名:", ext)
+
+	// 2. Loader 加载文档，获取schema.Document
+	var p parser.Parser
+	switch ext {
+	case ".pdf":
+		p, err = pdf.NewDocconvPDFParser(ctx, nil)
+		//p, err = utils.NewCustomPdfParser(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("获取pdfparser失败：%v", err)
+		}
+	default:
+		fmt.Println("未找到适合扩展名的解析器:", ext)
+		p = nil
+	}
+
+	l, err := url.NewLoader(ctx, &url.LoaderConfig{Parser: p})
+
+	if err != nil {
+		return fmt.Errorf("创建Loader失败: %w", err)
+	}
+	docs, err := l.Load(ctx, document.Source{
+		URI: fURL,
+	})
+	if err != nil {
+		return fmt.Errorf("加载文档失败: %w", err)
+	}
+	fmt.Printf("文档加载成功，共%d个文档部分\n", len(docs))
+
+	// 3. 文本分割
+	splitter, err := recursive.NewSplitter(ctx, &recursive.Config{
+		ChunkSize:   config.AppConfigInstance.RAG.ChunkSize,
+		OverlapSize: config.AppConfigInstance.RAG.OverlapSize,
+	})
+	if err != nil {
+		return fmt.Errorf("加载分块器失败: %w", err)
+	}
+
+	texts, err := splitter.Transform(ctx, docs)
+	if err != nil {
+		return fmt.Errorf("分块失败: %w", err)
+	}
+	fmt.Printf("文本分块成功，共%d个文本块\n", len(texts))
+	if len(texts) == 0 {
+		return fmt.Errorf("文档解析未生成有效文本块，请检查文档内容或格式")
+	}
+
+	for i, d := range texts {
+		d.ID = GenerateUUID()
+		d.MetaData["kb_id"] = kbID
+		d.MetaData["document_id"] = doc.ID
+		d.MetaData["document_name"] = f.Name
+		d.MetaData["chunk_index"] = i
+	}
+
+	fmt.Println("开始构建Indexer")
+	milvusIndexer, err := milvus.NewMilvusIndexer(&milvus.MilvusIndexerConfig{
+		Collection: kb.MilvusCollection,
+		Dimension:  embeddingService.GetDimension(),
+		Embedding:  embeddingService,
+	})
+	fmt.Println("构建Indexer成功")
+	if err != nil {
+		return fmt.Errorf("创建milvus索引器失败: %w", err)
+	}
+	fmt.Println("开始Store")
+	ids, err := milvusIndexer.Store(ctx, texts)
+	if err != nil {
+		return fmt.Errorf("向量索引失败: %w", err)
+	}
+
+	fmt.Printf("向量索引成功，共%d个向量\n", len(ids))
+	println(ids)
+
+	return nil
 }
 
 // 解析一个文件
