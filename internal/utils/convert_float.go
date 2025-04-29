@@ -11,3 +11,11 @@ func ConvertFloat64ToFloat32Embeddings(embeddings [][]float64) [][]float32 {
 	}
 	return float32Embeddings
 }
+
+func ConvertFloat64ToFloat32Embedding(embedding []float64) []float32 {
+	float32Embedding := make([]float32, len(embedding))
+	for i, v := range embedding {
+		float32Embedding[i] = float32(v)
+	}
+	return float32Embedding
+}

@@ -246,7 +246,6 @@ func (m *milvusDao) insertDataWithRetry(ctx context.Context, collectionName stri
 	for i := 0; i < maxRetries; i++ {
 		fmt.Printf("insertDataWithRetry debug, try to insert data: (%d/%d)...\n", i+1, maxRetries)
 		_, err := m.mv.Insert(ctx, collectionName, "", columns...)
-
 		if err == nil {
 			fmt.Printf("insertDataWithRetry Success!\n")
 			return nil
