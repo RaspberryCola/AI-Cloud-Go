@@ -2,6 +2,7 @@ package service
 
 import (
 	"ai-cloud/config"
+	"ai-cloud/internal/component/embedding"
 	"ai-cloud/internal/component/indexer/milvus"
 	"ai-cloud/internal/component/parser/pdf"
 	"ai-cloud/internal/dao"
@@ -13,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -58,9 +58,8 @@ type kbService struct {
 	milvusDao     dao.MilvusDao
 	fileService   FileService
 	storageDriver storage.Driver
-	//embeddingService EmbeddingService // 使用新的嵌入服务接口
-	llm            *openai.ChatModel
-	embedFactories map[string]EmbeddingFactory
+	llm           *openai.ChatModel
+	//embeddingService embedding.EmbeddingService
 }
 
 func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileService FileService, modelDao dao.ModelDao) KBService {
@@ -70,17 +69,6 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 	driver, err := storage.NewDriver(cfg)
 	if err != nil {
 		panic("无法连接到存储服务: " + err.Error())
-	}
-
-	//// 使用工厂函数创建合适的嵌入服务
-	//embeddingService, err := NewEmbeddingService(ctx)
-	//if err != nil {
-	//	panic("无法创建嵌入服务: " + err.Error())
-	//}
-
-	factories := map[string]EmbeddingFactory{
-		"openai": &OpenAIEmbeddingFactory{},
-		"ollama": &OllamaEmbeddingFactory{},
 	}
 
 	// 从配置文件获取LLM配置
@@ -98,23 +86,13 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 	})
 
 	return &kbService{
-		kbDao:          kbDao,
-		milvusDao:      milvusDao,
-		modelDao:       modelDao,
-		fileService:    fileService,
-		storageDriver:  driver,
-		embedFactories: factories,
-		llm:            llm,
+		kbDao:         kbDao,
+		milvusDao:     milvusDao,
+		modelDao:      modelDao,
+		fileService:   fileService,
+		storageDriver: driver,
+		llm:           llm,
 	}
-}
-
-// getEnvWithDefault 获取环境变量，如果不存在则返回默认值
-func getEnvWithDefault(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }
 
 func (ks *kbService) CreateKB(userID uint, name, description, embedModelID string) error {
@@ -255,13 +233,13 @@ func (ks *kbService) ProcessDocumentNew(userID uint, kbID string, doc *model.Doc
 		return fmt.Errorf("获取嵌入模型失败: %w", err)
 	}
 
-	factory, ok := ks.embedFactories[embedModel.Server]
-	if !ok {
-		return fmt.Errorf("不支持的embedding模型类型，目前仅支持openai和ollama: %s", embedModel.Type)
-	}
+	// TODO: Timeout从配置中获取
+	embeddingService, err := embedding.NewEmbeddingService(
+		ctx,
+		embedModel,
+		embedding.WithTimeout(30*time.Second),
+	)
 
-	// 使用工厂创建embedding服务实例
-	embeddingService, err := factory.CreateEmbedder(context.Background(), embedModel)
 	if err != nil {
 		return fmt.Errorf("创建embedding服务实例失败: %w", err)
 	}
@@ -368,13 +346,13 @@ func (ks *kbService) ProcessDocument(userID uint, kbID string, doc *model.Docume
 		return fmt.Errorf("获取嵌入模型失败: %w", err)
 	}
 
-	factory, ok := ks.embedFactories[embedModel.Server]
-	if !ok {
-		return fmt.Errorf("不支持的embedding模型类型，目前仅支持openai和ollama: %s", embedModel.Type)
-	}
+	// TODO: Timeout从配置中获取
+	embeddingService, err := embedding.NewEmbeddingService(
+		ctx,
+		embedModel,
+		embedding.WithTimeout(30*time.Second),
+	)
 
-	// 使用工厂创建embedding服务实例
-	embeddingService, err := factory.CreateEmbedder(context.Background(), embedModel)
 	if err != nil {
 		return fmt.Errorf("创建embedding服务实例失败: %w", err)
 	}
@@ -518,12 +496,12 @@ func (ks *kbService) Retrieve(userID uint, kbID string, query string, topK int) 
 	if err != nil {
 		return nil, fmt.Errorf("获取嵌入模型失败: %w", err)
 	}
-	factory, ok := ks.embedFactories[embedModel.Server]
-	if !ok {
-		return nil, fmt.Errorf("不支持的embedding模型类型，目前仅支持openai和ollama: %s", embedModel.Type)
-	}
-
-	embeddingService, err := factory.CreateEmbedder(ctx, embedModel)
+	// TODO: Timeout从配置中获取
+	embeddingService, err := embedding.NewEmbeddingService(
+		ctx,
+		embedModel,
+		embedding.WithTimeout(30*time.Second),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("创建embedding服务实例失败: %w", err)
 	}

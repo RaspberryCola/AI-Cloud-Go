@@ -2,6 +2,7 @@ package main
 
 import (
 	"ai-cloud/config"
+	_ "ai-cloud/internal/component/embedding"
 	"ai-cloud/internal/controller"
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/database"
