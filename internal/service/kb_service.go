@@ -226,7 +226,8 @@ func (ks *kbService) ProcessDocumentNew(ctx context.Context, userID uint, kbID s
 	if err != nil {
 		return fmt.Errorf("获取知识库失败: %w", err)
 	}
-	// 获取嵌入模型信息
+
+	// 获取model，构建EmbeddingService实例
 	embedModel, err := ks.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
 	if err != nil {
 		return fmt.Errorf("获取嵌入模型失败: %w", err)
@@ -242,25 +243,24 @@ func (ks *kbService) ProcessDocumentNew(ctx context.Context, userID uint, kbID s
 	if err != nil {
 		return fmt.Errorf("创建embedding服务实例失败: %w", err)
 	}
-	// 1. 获取File
-	//f := &model.File{}
+
+	// 获取文件元信息（*model.File）
 	f, err := ks.fileService.GetFileByID(doc.FileID)
 	if err != nil {
 		return fmt.Errorf("获取文件失败: %w", err)
 	}
-
+	// 获取文件在存储中的URL
 	fURL, _ := ks.storageDriver.GetURL(f.StorageKey)
 	fmt.Println("处理文档:", f.Name, "URL:", fURL)
 
 	ext := strings.ToLower(filepath.Ext(f.Name))
 	fmt.Println("文件扩展名:", ext)
 
-	// 2. Loader 加载文档，获取schema.Document
+	// Loader 加载文档，获取schema.Document
 	var p parser.Parser
 	switch ext {
 	case ".pdf":
 		p, err = pdf.NewDocconvPDFParser(ctx, nil)
-		//p, err = utils.NewCustomPdfParser(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("获取pdfparser失败：%v", err)
 		}
@@ -282,7 +282,7 @@ func (ks *kbService) ProcessDocumentNew(ctx context.Context, userID uint, kbID s
 	}
 	fmt.Printf("文档加载成功，共%d个文档部分\n", len(docs))
 
-	// 3. 文本分割
+	// Splitter 文本分割
 	splitter, err := recursive.NewSplitter(ctx, &recursive.Config{
 		ChunkSize:   config.AppConfigInstance.RAG.ChunkSize,
 		OverlapSize: config.AppConfigInstance.RAG.OverlapSize,
@@ -308,6 +308,7 @@ func (ks *kbService) ProcessDocumentNew(ctx context.Context, userID uint, kbID s
 		d.MetaData["chunk_index"] = i
 	}
 
+	// Indexer
 	fmt.Println("开始构建Indexer")
 	milvusIndexer, err := milvus.NewMilvusIndexer(ctx, &milvus.MilvusIndexerConfig{
 		Client:     database.GetMilvusClient(),
@@ -328,7 +329,7 @@ func (ks *kbService) ProcessDocumentNew(ctx context.Context, userID uint, kbID s
 	fmt.Printf("向量索引成功，共%d个向量\n", len(ids))
 	println(ids)
 
-	// 5. 更新文档状态
+	// 更新文档状态
 	doc.Status = 2 // 已完成
 	doc.UpdatedAt = time.Now()
 	if err := ks.kbDao.UpdateDocument(doc); err != nil {

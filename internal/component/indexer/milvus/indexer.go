@@ -252,3 +252,7 @@ func (m *MilvusIndexerConfig) check() error {
 	}
 	return nil
 }
+
+func (m *MilvusIndexerConfig) IsCallbacksEnabled() bool {
+	return true
+}
