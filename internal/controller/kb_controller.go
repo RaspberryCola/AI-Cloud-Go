@@ -139,7 +139,7 @@ func (kc *KBController) AddExistFile(ctx *gin.Context) {
 	//	response.InternalError(ctx, errcode.InternalServerError, err.Error())
 	//	return
 	//}
-	if err = kc.kbService.ProcessDocument(userID, req.KBID, doc); err != nil {
+	if err = kc.kbService.ProcessDocumentNew(userID, req.KBID, doc); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return
 	}

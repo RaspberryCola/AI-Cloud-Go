@@ -23,13 +23,35 @@ type MilvusIndexer struct {
 }
 
 func NewMilvusIndexer(indexerConfig *MilvusIndexerConfig) (*MilvusIndexer, error) {
+
+	ctx := context.Background()
+	cli := milvus.GetMilvusClient()
+	exists, err := cli.HasCollection(ctx, indexerConfig.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("检查milvus失败: %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("collection %s does not exist", indexerConfig.Collection)
+	}
+	// 2. Load Collection
+	err = cli.LoadCollection(ctx, indexerConfig.Collection, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load collection: %v", err)
+	}
+	// TODO：配置检查
+
+	// TODO：检查Embedding模型对应的Collection是否创建
+
+	// TODO：loadCollection
+
 	return &MilvusIndexer{
-		client: milvus.GetMilvusClient(),
+		client: cli,
 		config: *indexerConfig,
 	}, nil
 }
 
 func (m *MilvusIndexer) Store(ctx context.Context, docs []*schema.Document, opts ...indexer.Option) (ids []string, err error) {
+
 	// 如果有opts则用opts中的配置（允许在Store的时候更换Embedder配置）
 	co := indexer.GetCommonOptions(&indexer.Options{ //提供默认值选项
 		SubIndexes: nil,
@@ -75,12 +97,12 @@ func (m *MilvusIndexer) Store(ctx context.Context, docs []*schema.Document, opts
 	if len(vectors) != len(docs) {
 		return nil, fmt.Errorf("[Indexer.Store] embedding vector length mismatch")
 	}
-	log.Println("[INFO] 开始convert")
+	fmt.Println("开始convert")
 	rows, err := DocumentConvert(ctx, docs, vectors)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(rows)
+	//fmt.Println(rows)
 
 	results, err := m.client.InsertRows(ctx, m.config.Collection, "", rows)
 	if err != nil {
@@ -89,7 +111,7 @@ func (m *MilvusIndexer) Store(ctx context.Context, docs []*schema.Document, opts
 	//if err := m.client.Flush(ctx, m.config.Collection, false); err != nil {
 	//	return nil, err
 	//}
-	fmt.Println(results)
+	fmt.Println("results:", results)
 	log.Println("[INFO] 存储完成")
 	ids = make([]string, results.Len())
 	for idx := 0; idx < results.Len(); idx++ {
@@ -116,6 +138,7 @@ func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]f
 		if !ok {
 			return nil, fmt.Errorf("invalid type for kb_id")
 		}
+
 		docID, ok := doc.MetaData["document_id"].(string)
 		if !ok {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
@@ -128,7 +151,7 @@ func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]f
 		if !ok {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
 		}
-
+		fmt.Printf("kbid:%s,docID:%s,docName:%s,index:%s ", kbID, docID, docName, chunkIndex)
 		em = append(em, defaultSchema{
 			ID:           doc.ID,
 			Content:      doc.Content,
@@ -136,7 +159,7 @@ func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]f
 			KBID:         kbID,
 			DocumentID:   docID,
 			DocumentName: docName,
-			ChunkIndex:   chunkIndex,
+			ChunkIndex:   int32(chunkIndex),
 		})
 		texts = append(texts, doc.Content)
 	}
@@ -145,6 +168,7 @@ func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]f
 	for idx, vec := range vectors {
 		em[idx].Vector = ConvertFloat64ToFloat32Embedding(vec)
 		rows = append(rows, &em[idx])
+		fmt.Println(em[idx].Vector)
 	}
 	return rows, nil
 }
