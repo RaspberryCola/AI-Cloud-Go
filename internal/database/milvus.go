@@ -1,4 +1,4 @@
-package milvus
+package database
 
 import (
 	"ai-cloud/config"

@@ -6,7 +6,6 @@ import (
 	"ai-cloud/internal/controller"
 	"ai-cloud/internal/dao"
 	"ai-cloud/internal/database"
-	"ai-cloud/internal/database/milvus"
 	"ai-cloud/internal/middleware"
 	"ai-cloud/internal/router"
 	"ai-cloud/internal/service"
@@ -27,7 +26,7 @@ func main() {
 	fileService := service.NewFileService(fileDao)
 	fileController := controller.NewFileController(fileService)
 
-	milvusClient, _ := milvus.InitMilvus(ctx)
+	milvusClient, _ := database.InitMilvus(ctx)
 	milvusDao := dao.NewMilvusDao(milvusClient)
 	defer milvusClient.Close()
 

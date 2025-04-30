@@ -6,6 +6,7 @@ import (
 	"ai-cloud/internal/component/indexer/milvus"
 	"ai-cloud/internal/component/parser/pdf"
 	"ai-cloud/internal/dao"
+	"ai-cloud/internal/database"
 	"ai-cloud/internal/model"
 	"ai-cloud/internal/storage"
 	"ai-cloud/internal/utils"
@@ -35,13 +36,12 @@ type KBService interface {
 	GetKBDetail(userID uint, kbID string) (*model.KnowledgeBase, error)             // 获取知识库详情
 
 	// 文档
-
 	CreateDocument(userID uint, kbID string, file *model.File) (*model.Document, error)    // 添加File到知识库
 	ProcessDocument(userID uint, kbID string, doc *model.Document) error                   // 解析嵌入文档（后续需要细化）
 	DocList(userID uint, kbID string, page int, size int) (int64, []model.Document, error) // 获取知识库下的文件列表
 	DeleteDocs(userID uint, kbID string, docs []string) error                              // 批量删除文件
 
-	ProcessDocumentNew(userID uint, kbID string, doc *model.Document) error
+	ProcessDocumentNew(ctx context.Context, userID uint, kbID string, doc *model.Document) error
 
 	// RAG
 	Retrieve(userID uint, kbID string, query string, topK int) ([]model.Chunk, error)                                        // 获取检索的Chunks
@@ -220,8 +220,7 @@ func (ks *kbService) CreateDocument(userID uint, kbID string, file *model.File) 
 	return doc, nil
 }
 
-func (ks *kbService) ProcessDocumentNew(userID uint, kbID string, doc *model.Document) error {
-	ctx := context.Background()
+func (ks *kbService) ProcessDocumentNew(ctx context.Context, userID uint, kbID string, doc *model.Document) error {
 	// 获取知识库信息
 	kb, err := ks.kbDao.GetKBByID(kbID)
 	if err != nil {
@@ -310,7 +309,8 @@ func (ks *kbService) ProcessDocumentNew(userID uint, kbID string, doc *model.Doc
 	}
 
 	fmt.Println("开始构建Indexer")
-	milvusIndexer, err := milvus.NewMilvusIndexer(&milvus.MilvusIndexerConfig{
+	milvusIndexer, err := milvus.NewMilvusIndexer(ctx, &milvus.MilvusIndexerConfig{
+		Client:     database.GetMilvusClient(),
 		Collection: kb.MilvusCollection,
 		Dimension:  embeddingService.GetDimension(),
 		Embedding:  embeddingService,
@@ -327,6 +327,13 @@ func (ks *kbService) ProcessDocumentNew(userID uint, kbID string, doc *model.Doc
 
 	fmt.Printf("向量索引成功，共%d个向量\n", len(ids))
 	println(ids)
+
+	// 5. 更新文档状态
+	doc.Status = 2 // 已完成
+	doc.UpdatedAt = time.Now()
+	if err := ks.kbDao.UpdateDocument(doc); err != nil {
+		return fmt.Errorf("更新文档状态失败: %w", err)
+	}
 
 	return nil
 }
