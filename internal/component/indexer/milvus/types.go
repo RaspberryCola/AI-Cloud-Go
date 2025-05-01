@@ -1,15 +1,13 @@
 package milvus
 
-// defaultSchema is the default schema for milvus by eino
+// defaultSchema
 type defaultSchema struct {
-	ID           string    `json:"id" milvus:"name:id"`
-	Content      string    `json:"content" milvus:"name:content"`
-	DocumentID   string    `json:"document_id" milvus:"name:document_id"`
-	DocumentName string    `json:"document_name" milvus:"name:document_name"`
-	KBID         string    `json:"kb_id" milvus:"name:kb_id"`
-	ChunkIndex   int32     `json:"chunk_index" milvus:"name:chunk_index"`
-	Vector       []float32 `json:"vector" milvus:"name:vector"`
-	//Metadata []byte `json:"metadata" milvus:"name:metadata"`
+	ID         string    `json:"id" milvus:"name:id"`
+	Content    string    `json:"content" milvus:"name:content"`
+	DocumentID string    `json:"document_id" milvus:"name:document_id"`
+	KBID       string    `json:"kb_id" milvus:"name:kb_id"`
+	Vector     []float32 `json:"vector" milvus:"name:vector"`
+	Metadata   []byte    `json:"metadata" milvus:"name:metadata"` // 存放例如DocumentName，Index等信息
 }
 
 //

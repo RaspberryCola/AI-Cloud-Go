@@ -22,6 +22,8 @@ const (
 	FieldNameChunkIndex = "chunk_index"
 	// FieldNameVector 向量字段名
 	FieldNameVector = "vector"
+	// FiledNameMetadata meta信息
+	FieldNameMetadata = "metadata"
 )
 
 // 查询相关字段

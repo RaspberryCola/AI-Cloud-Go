@@ -20,9 +20,9 @@ type MilvusRetrieverConfig struct {
 	Embedding      embedding.Embedder // Required
 	Collection     string             // Required
 	KBIDs          []string           // Required 至少要查询一个知识库
+	SearchFields   []string           // Optional defaultSearchFields
 	TopK           int                // Optional default is 5
 	ScoreThreshold float64            // Optional default is 0
-
 }
 
 type MilvusRetriever struct {
@@ -102,10 +102,10 @@ func (m *MilvusRetriever) Retrieve(ctx context.Context, query string, opts ...re
 	metricType := config.GetConfig().Milvus.GetMetricType()
 	results, err = m.config.Client.Search(
 		ctx,
-		m.config.Collection, // 集合名称：指定要搜索的Milvus集合
-		[]string{},          // 分区名称：空表示搜索所有分区
-		expr,                // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
-		consts.SearchFields, // 输出字段：指定返回结果中包含哪些字段
+		m.config.Collection,   // 集合名称：指定要搜索的Milvus集合
+		[]string{},            // 分区名称：空表示搜索所有分区
+		expr,                  // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
+		m.config.SearchFields, // 输出字段：指定返回结果中包含哪些字段
 		[]entity.Vector{entity.FloatVector(vector)}, // 查询向量：将输入向量转换为Milvus向量格式
 		consts.FieldNameVector,                      // 向量字段名：指定在哪个字段上执行向量搜索（对应Index）
 		metricType,                                  // 度量类型：如何计算向量相似度（如余弦相似度、欧几里得距离等）
@@ -139,39 +139,52 @@ func DocumentConverter(ctx context.Context, doc client.SearchResult) ([]*schema.
 			MetaData: make(map[string]any),
 		}
 	}
+
+	importantMetaFields := map[string]bool{
+		consts.FieldNameDocumentID: true,
+		consts.FieldNameKBID:       true,
+	}
+
 	for _, field := range doc.Fields {
 		switch field.Name() {
-		case "id":
+		case consts.FieldNameID:
 			for i, document := range result {
 				document.ID, err = doc.IDs.GetAsString(i)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get id: %w", err)
 				}
 			}
-		case "content":
+		case consts.FieldNameContent:
 			for i, document := range result {
 				document.Content, err = field.GetAsString(i)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get content: %w", err)
 				}
 			}
-		case "metadata":
-			for i, document := range result {
-				b, err := field.Get(i)
-				bytes, ok := b.([]byte)
+		case consts.FieldNameMetadata:
+			for i := range result {
+				val, _ := field.Get(i)
+				bytes, ok := val.([]byte)
 				if !ok {
-					return nil, fmt.Errorf("failed to get metadata: %w", err)
+					return nil, fmt.Errorf("metadata field is not []byte")
 				}
-				if err := sonic.Unmarshal(bytes, &document.MetaData); err != nil {
-					return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+				var meta map[string]any
+				if err := sonic.Unmarshal(bytes, &meta); err != nil {
+					return nil, fmt.Errorf("unmarshal metadata failed: %w", err)
+				}
+				for k, v := range meta {
+					result[i].MetaData[k] = v
 				}
 			}
 		default:
-			for i, document := range result {
-				document.MetaData[field.Name()], err = field.GetAsString(i)
-			}
-			if err != nil { // 捕获错误
-				return nil, fmt.Errorf("failed to get field %s: %w", field.Name(), err)
+			if importantMetaFields[field.Name()] {
+				for i := range result {
+					val, err := field.GetAsString(i)
+					if err != nil {
+						return nil, fmt.Errorf("get field %s failed: %w", field.Name(), err)
+					}
+					result[i].MetaData[field.Name()] = val
+				}
 			}
 		}
 	}
@@ -193,7 +206,9 @@ func (m *MilvusRetrieverConfig) check() error {
 	if m.Collection == "" {
 		return fmt.Errorf("[NewMilvusRetriever] collection is empty")
 	}
-
+	if m.SearchFields == nil {
+		m.SearchFields = defaultSearchFields // 默认搜索字段
+	}
 	if m.TopK == 0 {
 		m.TopK = 5 // 默认返回结果数量
 	}

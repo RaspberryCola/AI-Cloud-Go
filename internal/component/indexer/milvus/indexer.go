@@ -6,6 +6,7 @@ import (
 	"ai-cloud/pkgs/consts"
 	"context"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/components/indexer"
 	"github.com/cloudwego/eino/schema"
@@ -132,22 +133,18 @@ func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]f
 		if !ok {
 			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
 		}
-		docName, ok := doc.MetaData["document_name"].(string)
-		if !ok {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
-		}
-		chunkIndex, ok := doc.MetaData["chunk_index"].(int)
-		if !ok {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
+
+		metadata, err := sonic.Marshal(doc.MetaData)
+		if err != nil {
+			return nil, fmt.Errorf("[MilvusIndexer.DocumentConvert] failed to marshal metadata: %w", err)
 		}
 		em = append(em, defaultSchema{
-			ID:           doc.ID,
-			Content:      doc.Content,
-			Vector:       nil,
-			KBID:         kbID,
-			DocumentID:   docID,
-			DocumentName: docName,
-			ChunkIndex:   int32(chunkIndex),
+			ID:         doc.ID,
+			Content:    doc.Content,
+			Vector:     nil,
+			KBID:       kbID,
+			DocumentID: docID,
+			Metadata:   metadata,
 		})
 		texts = append(texts, doc.Content)
 	}
@@ -193,22 +190,11 @@ func (m *MilvusIndexerConfig) createCollection(ctx context.Context, collectionNa
 				},
 			},
 			{
-				Name:     consts.FieldNameDocumentName,
-				DataType: entity.FieldTypeVarChar,
-				TypeParams: map[string]string{
-					"max_length": milvusConfig.DocNameMaxLength,
-				},
-			},
-			{
 				Name:     consts.FieldNameKBID,
 				DataType: entity.FieldTypeVarChar,
 				TypeParams: map[string]string{
 					"max_length": milvusConfig.KbIDMaxLength,
 				},
-			},
-			{
-				Name:     consts.FieldNameChunkIndex,
-				DataType: entity.FieldTypeInt32,
 			},
 			{
 				Name:     consts.FieldNameVector,
@@ -217,38 +203,42 @@ func (m *MilvusIndexerConfig) createCollection(ctx context.Context, collectionNa
 					"dim": strconv.Itoa(dimension),
 				},
 			},
+			{
+				Name:     consts.FieldNameMetadata,
+				DataType: entity.FieldTypeJSON,
+			},
 		},
 	}
 
 	// 创建集合
 	if err := m.Client.CreateCollection(ctx, schema, 1); err != nil {
-		return fmt.Errorf("创建集合失败: %w", err)
+		return fmt.Errorf("[NewMilvusIndexer.createCollection] 创建集合失败: %w", err)
 	}
 
 	// 创建索引
 	idx, err := milvusConfig.GetMilvusIndex()
 	if err != nil {
-		return fmt.Errorf("从配置中获取索引类型失败: %w", err)
+		return fmt.Errorf("[NewMilvusIndexer.createCollection] 从配置中获取索引类型失败: %w", err)
 	}
 
-	if err := m.Client.CreateIndex(ctx, collectionName, "vector", idx, false); err != nil {
-		return fmt.Errorf("创建索引失败: %w", err)
+	if err := m.Client.CreateIndex(ctx, collectionName, consts.FieldNameVector, idx, false); err != nil {
+		return fmt.Errorf("[NewMilvusIndexer.createCollection] 创建索引失败: %w", err)
 	}
 	return nil
 }
 
 func (m *MilvusIndexerConfig) check() error {
 	if m.Client == nil {
-		return fmt.Errorf("[NewMilvusIndexer]milvus client is nil")
+		return fmt.Errorf("[NewMilvusIndexer] milvus client is nil")
 	}
 	if m.Embedding == nil {
-		return fmt.Errorf("[NewMilvusIndexer]embedding is nil")
+		return fmt.Errorf("[NewMilvusIndexer] embedding is nil")
 	}
 	if m.Collection == "" {
-		return fmt.Errorf("[NewMilvusIndexer]collection is empty")
+		return fmt.Errorf("[NewMilvusIndexer] collection is empty")
 	}
 	if m.Dimension == 0 {
-		return fmt.Errorf("[NewMilvusIndexer]embedding dimension is zero")
+		return fmt.Errorf("[NewMilvusIndexer] embedding dimension is zero")
 	}
 	return nil
 }
