@@ -29,7 +29,7 @@ type MilvusRetriever struct {
 	config MilvusRetrieverConfig
 }
 
-func NewMilvusRetriver(ctx context.Context, conf *MilvusRetrieverConfig) (*MilvusRetriever, error) {
+func NewMilvusRetriever(ctx context.Context, conf *MilvusRetrieverConfig) (*MilvusRetriever, error) {
 	// 检查必要配置，设置默认值
 	if err := conf.check(); err != nil {
 		return nil, fmt.Errorf("[NewMilvusRetriever] check config failed : %w", err)
@@ -107,7 +107,7 @@ func (m *MilvusRetriever) Retrieve(ctx context.Context, query string, opts ...re
 		expr,                // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
 		consts.SearchFields, // 输出字段：指定返回结果中包含哪些字段
 		[]entity.Vector{entity.FloatVector(vector)}, // 查询向量：将输入向量转换为Milvus向量格式
-		consts.FieldNameVector,                      // 向量字段名：指定在哪个字段上执行向量搜索
+		consts.FieldNameVector,                      // 向量字段名：指定在哪个字段上执行向量搜索（对应Index）
 		metricType,                                  // 度量类型：如何计算向量相似度（如余弦相似度、欧几里得距离等）
 		m.config.TopK,                               // 返回数量：返回的最相似结果数量
 		sp,                                          // 搜索参数：索引特定的搜索参数，如nprobe（探测聚类数）
