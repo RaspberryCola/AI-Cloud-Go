@@ -1,6 +1,7 @@
 package milvus
 
 import (
+	"ai-cloud/config"
 	"ai-cloud/internal/utils"
 	"ai-cloud/pkgs/consts"
 	"context"
@@ -11,83 +12,118 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"strings"
 )
 
 type MilvusRetrieverConfig struct {
-	Client     client.Client
-	Embedder   embedding.Embedder
-	Collection string
-	Index      string
-	TopK       int
+	Client         client.Client      // Required
+	Embedding      embedding.Embedder // Required
+	Collection     string             // Required
+	KBIDs          []string           // Required 至少要查询一个知识库
+	TopK           int                // Optional default is 5
+	ScoreThreshold float64            // Optional default is 0
+
 }
 
 type MilvusRetriever struct {
-	client client.Client
 	config MilvusRetrieverConfig
 }
 
-func NewMilvusRetriver(config *MilvusRetrieverConfig) (*MilvusRetriever, error) {
+func NewMilvusRetriver(ctx context.Context, conf *MilvusRetrieverConfig) (*MilvusRetriever, error) {
+	// 检查必要配置，设置默认值
+	if err := conf.check(); err != nil {
+		return nil, fmt.Errorf("[NewMilvusRetriever] check config failed : %w", err)
+	}
+	// 检查Collection是否存在
+	exists, err := conf.Client.HasCollection(ctx, conf.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("[NewMilvusRetriever] check milvus collection failed : %w", err)
+	}
+	if !exists {
+		return nil, fmt.Errorf("[NewMilvusRetirever] collection %s not exists", conf.Collection)
+	}
+
+	// 检查是否load，没load的话load
+	collection, err := conf.Client.DescribeCollection(ctx, conf.Collection)
+	if err != nil {
+		return nil, fmt.Errorf("[NewRetriever] failed to describe collection: %w", err)
+	}
+
+	if !collection.Loaded {
+		err = conf.Client.LoadCollection(ctx, conf.Collection, false)
+		if err != nil {
+			return nil, fmt.Errorf("[NewMilvusRetriever] failed to load collection: %w", err)
+		}
+	}
+
 	return &MilvusRetriever{
-		client: config.Client,
-		config: *config,
+		config: *conf,
 	}, nil
 }
 
 var FieldNameVector = "vector"
 
 func (m *MilvusRetriever) Retrieve(ctx context.Context, query string, opts ...retriever.Option) ([]*schema.Document, error) {
+	// retrieve的时候指定参数
 	co := retriever.GetCommonOptions(&retriever.Options{
-		Index:     &m.config.Index,
-		TopK:      &m.config.TopK,
-		Embedding: m.config.Embedder,
-	})
+		SubIndex:       nil,
+		TopK:           &m.config.TopK,
+		ScoreThreshold: &m.config.ScoreThreshold,
+		Embedding:      m.config.Embedding,
+	}, opts...)
 
 	emb := co.Embedding
 	vectors, err := emb.EmbedStrings(ctx, []string{query})
 	if err != nil {
-		return nil, fmt.Errorf("[milvus retriever] embedding has error: %w", err)
+		return nil, fmt.Errorf("[MilvusRetriver.Retrieve] embedding has error: %w", err)
 	}
-	// check the embedding result
+	// 检查结果数量是否正确
 	if len(vectors) != 1 {
-		return nil, fmt.Errorf("[milvus retriever] invalid return length of vector, got=%d, expected=1", len(vectors))
+		return nil, fmt.Errorf("[MilvusRetriver.Retrieve] invalid return length of vector, got=%d, expected=1", len(vectors))
 	}
 
 	vector := utils.ConvertFloat64ToFloat32Embedding(vectors[0])
 
-	//vec := make([]entity.FloatVector, 0, len(vectors))
-	//for _, vector := range vectors {
-	//	v := utils.ConvertFloat64ToFloat32Embedding(vector)
-	//
-	//	vec = append(vec, utils.ConvertFloat64ToFloat32Embedding(vector))
-	//}
+	// 构造查询条件和参数
+	kbIDs := m.config.KBIDs
+	var expr string
+	if len(kbIDs) > 0 {
+		quotedIDs := make([]string, len(kbIDs))
+		for i, id := range kbIDs {
+			quotedIDs[i] = fmt.Sprintf(`"%s"`, id)
+		}
+		expr = fmt.Sprintf("%s in [%s]", consts.FieldNameKBID, strings.Join(quotedIDs, ","))
+	} else {
+		expr = "0 == 1"
+	}
 
 	var results []client.SearchResult
-	sp, _ := entity.NewIndexIvfFlatSearchParam(16)
-
-	results, err = m.client.Search(
+	sp, _ := entity.NewIndexIvfFlatSearchParam(config.GetConfig().Milvus.Nprobe)
+	metricType := config.GetConfig().Milvus.GetMetricType()
+	results, err = m.config.Client.Search(
 		ctx,
-		m.config.Collection,
-		[]string{},
-		"",
-		consts.SearchFields,
-		[]entity.Vector{entity.FloatVector(vector)},
-		consts.FieldNameVector,
-		entity.COSINE,
-		m.config.TopK,
-		sp,
+		m.config.Collection, // 集合名称：指定要搜索的Milvus集合
+		[]string{},          // 分区名称：空表示搜索所有分区
+		expr,                // 过滤表达式：限制搜索范围，这里只搜索指定知识库ID的文档
+		consts.SearchFields, // 输出字段：指定返回结果中包含哪些字段
+		[]entity.Vector{entity.FloatVector(vector)}, // 查询向量：将输入向量转换为Milvus向量格式
+		consts.FieldNameVector,                      // 向量字段名：指定在哪个字段上执行向量搜索
+		metricType,                                  // 度量类型：如何计算向量相似度（如余弦相似度、欧几里得距离等）
+		m.config.TopK,                               // 返回数量：返回的最相似结果数量
+		sp,                                          // 搜索参数：索引特定的搜索参数，如nprobe（探测聚类数）
 	)
 
 	documents := make([]*schema.Document, 0, len(results))
 	for _, result := range results {
 		if result.Err != nil {
-			return nil, fmt.Errorf("[milvus retriever] search result has error: %w", result.Err)
+			return nil, fmt.Errorf("[MilvusRetriver.Retrieve] search result has error: %w", result.Err)
 		}
 		if result.IDs == nil || result.Fields == nil {
-			return nil, fmt.Errorf("[milvus retriever] search result has no ids or fields")
+			return nil, fmt.Errorf("[MilvusRetriver.Retrieve] search result has no ids or fields")
 		}
 		document, err := DocumentConverter(ctx, result)
 		if err != nil {
-			return nil, fmt.Errorf("[milvus retriever] failed to convert search result to schema.Document: %w", err)
+			return nil, fmt.Errorf("[MilvusRetriver.Retrieve] failed to convert search result to schema.Document: %w", err)
 		}
 		documents = append(documents, document...)
 	}
@@ -134,7 +170,36 @@ func DocumentConverter(ctx context.Context, doc client.SearchResult) ([]*schema.
 			for i, document := range result {
 				document.MetaData[field.Name()], err = field.GetAsString(i)
 			}
+			if err != nil { // 捕获错误
+				return nil, fmt.Errorf("failed to get field %s: %w", field.Name(), err)
+			}
 		}
 	}
 	return result, nil
+}
+
+func (m *MilvusRetriever) GetType() string {
+	return "Milvus"
+}
+
+// 检查必要配置
+func (m *MilvusRetrieverConfig) check() error {
+	if m.Client == nil {
+		return fmt.Errorf("[NewMilvusRetriever] milvus client is nil")
+	}
+	if m.Embedding == nil {
+		return fmt.Errorf("[NewMilvusRetriever] embedding is nil")
+	}
+	if m.Collection == "" {
+		return fmt.Errorf("[NewMilvusRetriever] collection is empty")
+	}
+
+	if m.TopK == 0 {
+		m.TopK = 5 // 默认返回结果数量
+	}
+	if m.ScoreThreshold == 0 {
+		m.ScoreThreshold = 0 // 默认相似度阈值
+	}
+
+	return nil
 }
