@@ -1,7 +1,3 @@
-Here is the **English translation** of your Chinese document:
-
----
-
 # AI-Cloud-Go — A Golang-Based Cloud Drive & Knowledge Base System
 
 [English](README.md) | [中文](README_CN.md)
