@@ -97,11 +97,11 @@ func NewKBService(kbDao dao.KnowledgeBaseDao, milvusDao dao.MilvusDao, fileServi
 
 func (ks *kbService) CreateKB(userID uint, name, description, embedModelID string) error {
 
-	embedModel, err := ks.modelDao.GetByID(context.Background(), userID, embedModelID)
-	if err != nil {
-		return errors.New("embedding model not found")
-	}
-	dimension := embedModel.Dimension
+	//embedModel, err := ks.modelDao.GetByID(context.Background(), userID, embedModelID)
+	//if err != nil {
+	//	return errors.New("embedding model not found")
+	//}
+	//dimension := embedModel.Dimension
 
 	collectionName := fmt.Sprintf("embed_%s", embedModelID)
 	collectionName = strings.ReplaceAll(collectionName, "-", "_")
@@ -115,10 +115,10 @@ func (ks *kbService) CreateKB(userID uint, name, description, embedModelID strin
 		MilvusCollection: collectionName,
 	}
 
-	// 创建milvus collection（如果已经存在，不会重复创建）
-	if err := ks.milvusDao.CreateCollection(context.Background(), collectionName, dimension); err != nil {
-		return errors.New("创建milvus collection失败: " + err.Error())
-	}
+	//// 创建milvus collection（如果已经存在，不会重复创建）
+	//if err := ks.milvusDao.CreateCollection(context.Background(), collectionName, dimension); err != nil {
+	//	return errors.New("创建milvus collection失败: " + err.Error())
+	//}
 
 	// 保存知识库记录
 	if err := ks.kbDao.CreateKB(kb); err != nil {

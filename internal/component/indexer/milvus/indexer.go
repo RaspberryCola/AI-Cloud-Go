@@ -116,40 +116,50 @@ func (m *MilvusIndexer) Store(ctx context.Context, docs []*schema.Document, opts
 func (m *MilvusIndexer) GetType() string {
 	return "Milvus"
 }
-
-func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]float64) ([]interface{}, error) {
+func DocumentConvert(
+	ctx context.Context,
+	docs []*schema.Document,
+	vectors [][]float64,
+) ([]interface{}, error) {
 
 	em := make([]defaultSchema, 0, len(docs))
-	texts := make([]string, 0, len(docs))
 	rows := make([]interface{}, 0, len(docs))
 
 	for _, doc := range docs {
+		// 从原始 MetaData 中拿出结构化字段
 		kbID, ok := doc.MetaData["kb_id"].(string)
 		if !ok {
 			return nil, fmt.Errorf("invalid type for kb_id")
 		}
-
 		docID, ok := doc.MetaData["document_id"].(string)
 		if !ok {
-			return nil, fmt.Errorf("failed to marshal metadata: %w", ok)
+			return nil, fmt.Errorf("invalid type for document_id")
 		}
 
-		metadata, err := sonic.Marshal(doc.MetaData)
-		if err != nil {
-			return nil, fmt.Errorf("[MilvusIndexer.DocumentConvert] failed to marshal metadata: %w", err)
+		// 构造要序列化到 Metadata 字段里的 map，排除 kb_id 和 document_id
+		metaCopy := make(map[string]any, len(doc.MetaData))
+		for k, v := range doc.MetaData {
+			if k == "kb_id" || k == "document_id" {
+				continue
+			}
+			metaCopy[k] = v
 		}
+		metadataBytes, err := sonic.Marshal(metaCopy)
+		if err != nil {
+			return nil, fmt.Errorf("[DocumentConvert] failed to marshal metadata: %w", err)
+		}
+
 		em = append(em, defaultSchema{
 			ID:         doc.ID,
 			Content:    doc.Content,
-			Vector:     nil,
 			KBID:       kbID,
 			DocumentID: docID,
-			Metadata:   metadata,
+			Vector:     nil,           // 后面统一填充
+			Metadata:   metadataBytes, // 只包含剩下的字段
 		})
-		texts = append(texts, doc.Content)
 	}
 
-	// build embedding documents for storing
+	// 填充向量并生成 rows
 	for idx, vec := range vectors {
 		em[idx].Vector = utils.ConvertFloat64ToFloat32Embedding(vec)
 		rows = append(rows, &em[idx])
