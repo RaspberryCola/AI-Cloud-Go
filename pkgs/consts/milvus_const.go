@@ -1,11 +1,5 @@
 package consts
 
-// 集合相关常量定义
-const (
-	// CollectionNameTextChunks 文本块集合名称
-	CollectionNameTextChunks = "text_chunks"
-)
-
 // 字段名称常量定义
 const (
 	// FieldNameID ID字段名
@@ -24,17 +18,4 @@ const (
 	FieldNameVector = "vector"
 	// FiledNameMetadata meta信息
 	FieldNameMetadata = "metadata"
-)
-
-// 查询相关字段
-var (
-	// SearchFields 搜索结果返回的字段
-	SearchFields = []string{
-		FieldNameID,
-		FieldNameContent,
-		FieldNameDocumentID,
-		FieldNameDocumentName,
-		FieldNameKBID,
-		FieldNameChunkIndex,
-	}
 )

@@ -13,6 +13,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"strconv"
+	"strings"
 )
 
 type MilvusIndexerConfig struct {
@@ -116,11 +117,7 @@ func (m *MilvusIndexer) Store(ctx context.Context, docs []*schema.Document, opts
 func (m *MilvusIndexer) GetType() string {
 	return "Milvus"
 }
-func DocumentConvert(
-	ctx context.Context,
-	docs []*schema.Document,
-	vectors [][]float64,
-) ([]interface{}, error) {
+func DocumentConvert(ctx context.Context, docs []*schema.Document, vectors [][]float64) ([]interface{}, error) {
 
 	em := make([]defaultSchema, 0, len(docs))
 	rows := make([]interface{}, 0, len(docs))
@@ -171,7 +168,7 @@ func (m *MilvusIndexerConfig) createCollection(ctx context.Context, collectionNa
 	// 获取 Milvus 配置
 	milvusConfig := config.GetConfig().Milvus
 	// 创建集合Schema
-	schema := &entity.Schema{
+	s := &entity.Schema{
 		CollectionName: collectionName,
 		Description:    "存储文档分块和向量",
 		AutoID:         false,
@@ -221,7 +218,7 @@ func (m *MilvusIndexerConfig) createCollection(ctx context.Context, collectionNa
 	}
 
 	// 创建集合
-	if err := m.Client.CreateCollection(ctx, schema, 1); err != nil {
+	if err := m.Client.CreateCollection(ctx, s, 1); err != nil {
 		return fmt.Errorf("[NewMilvusIndexer.createCollection] 创建集合失败: %w", err)
 	}
 
@@ -255,4 +252,12 @@ func (m *MilvusIndexerConfig) check() error {
 
 func (m *MilvusIndexerConfig) IsCallbacksEnabled() bool {
 	return true
+}
+
+func DeleteDos(client client.Client, docIDs []string, collectionName string) error {
+	expr := fmt.Sprintf("%s in [\"%s\"]", consts.FieldNameDocumentID, strings.Join(docIDs, "\",\""))
+	if err := client.Delete(context.Background(), collectionName, "", expr); err != nil {
+		return fmt.Errorf("[MilvusIndexer.DeleteDos] failed to delete documents: %w", err)
+	}
+	return nil
 }
