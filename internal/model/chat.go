@@ -1,8 +1,10 @@
 package model
 
+import "github.com/cloudwego/eino/schema"
+
 type ChatResponse struct {
-	Response   string  `json:"response"`
-	References []Chunk `json:"references"`
+	Response   string             `json:"response"`
+	References []*schema.Document `json:"references"`
 }
 
 type ChatRequest struct {

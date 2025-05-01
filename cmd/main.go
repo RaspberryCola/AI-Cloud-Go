@@ -27,7 +27,6 @@ func main() {
 	fileController := controller.NewFileController(fileService)
 
 	milvusClient, _ := database.InitMilvus(ctx)
-	milvusDao := dao.NewMilvusDao(milvusClient)
 	defer milvusClient.Close()
 
 	modelDao := dao.NewModelDao(db)
@@ -35,7 +34,7 @@ func main() {
 	modelController := controller.NewModelController(modelService)
 
 	kbDao := dao.NewKnowledgeBaseDao(db)
-	kbService := service.NewKBService(kbDao, milvusDao, fileService, modelDao)
+	kbService := service.NewKBService(kbDao, fileService, modelDao)
 	kbController := controller.NewKBController(kbService, fileService)
 
 	r := gin.Default()

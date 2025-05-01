@@ -135,11 +135,8 @@ func (kc *KBController) AddExistFile(ctx *gin.Context) {
 	}
 	// 处理解析文档
 	doc.Status = 1 //正在处理文档
-	//if err = kc.kbService.ProcessDocument(userID, req.KBID, doc); err != nil {
-	//	response.InternalError(ctx, errcode.InternalServerError, err.Error())
-	//	return
-	//}
-	if err = kc.kbService.ProcessDocumentNew(ctx, userID, req.KBID, doc); err != nil {
+
+	if err = kc.kbService.ProcessDocument(ctx, userID, req.KBID, doc); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return
 	}
@@ -217,7 +214,7 @@ func (kc *KBController) AddNewFile(ctx *gin.Context) {
 	}
 
 	doc.Status = 1 // 正在处理文档
-	if err = kc.kbService.ProcessDocument(userID, kbID, doc); err != nil {
+	if err = kc.kbService.ProcessDocument(ctx, userID, kbID, doc); err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, "处理文档失败: "+err.Error())
 		return
 	}
@@ -241,14 +238,14 @@ func (kc *KBController) Retrieve(ctx *gin.Context) {
 	}
 
 	// 3. 调用服务层检索
-	chunks, err := kc.kbService.Retrieve(userID, req.KBID, req.Query, req.TopK)
+	docs, err := kc.kbService.Retrieve(ctx, userID, req.KBID, req.Query, req.TopK)
 	if err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return
 	}
 
 	// 4. 返回结果
-	response.Success(ctx, chunks)
+	response.Success(ctx, docs)
 }
 
 func (kc *KBController) Chat(ctx *gin.Context) {
@@ -266,7 +263,7 @@ func (kc *KBController) Chat(ctx *gin.Context) {
 	}
 
 	// 3. 调用服务层处理
-	resp, err := kc.kbService.RAGQuery(userID, req.Query, req.KBs)
+	resp, err := kc.kbService.RAGQuery(ctx, userID, req.Query, req.KBs)
 	if err != nil {
 		response.InternalError(ctx, errcode.InternalServerError, err.Error())
 		return
@@ -305,8 +302,8 @@ func (kc *KBController) ChatStream(ctx *gin.Context) {
 	}
 
 	// 5. 发送流式响应
-	for response := range responseChan {
-		data, _ := json.Marshal(response)
+	for r := range responseChan {
+		data, _ := json.Marshal(r)
 		ctx.Writer.Write([]byte("data: " + string(data) + "\n\n"))
 		ctx.Writer.Flush()
 	}

@@ -188,6 +188,14 @@ func DocumentConverter(ctx context.Context, doc client.SearchResult) ([]*schema.
 			}
 		}
 	}
+
+	for i := range result {
+		if i >= len(doc.Scores) {
+			continue
+		}
+		result[i].MetaData["score"] = doc.Scores[i]
+	}
+
 	return result, nil
 }
 
