@@ -5,18 +5,18 @@ go 1.23.4
 require (
 	code.sajari.com/docconv/v2 v2.0.0-pre.4
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
+	github.com/bytedance/sonic v1.13.2
 	github.com/cloudwego/eino v0.3.27
 	github.com/cloudwego/eino-ext/components/document/loader/url v0.0.0-20250328102648-b47e7f1587fa
 	github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive v0.0.0-20250328102648-b47e7f1587fa
 	github.com/cloudwego/eino-ext/components/embedding/openai v0.0.0-20250328102648-b47e7f1587fa
 	github.com/cloudwego/eino-ext/components/model/openai v0.0.0-20250328102648-b47e7f1587fa
-	github.com/cloudwego/eino-ext/components/retriever/milvus v0.0.0-20250424061409-ccd60fbc7c1c
+	github.com/cloudwego/eino-ext/libs/acl/openai v0.0.0-20250422092704-54e372e1fa3d
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/gin-contrib/cors v1.7.3
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/go-multierror v1.1.1
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/minio/minio-go/v7 v7.0.84
 	github.com/ollama/ollama v0.5.12
@@ -34,11 +34,9 @@ require (
 	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/araddon/dateparse v0.0.0-20200409225146-d820a6159ab1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
-	github.com/bytedance/sonic v1.13.2 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/cloudwego/eino-ext/components/document/parser/html v0.0.0-20250117061805-cd80d1780d76 // indirect
-	github.com/cloudwego/eino-ext/libs/acl/openai v0.0.0-20250305023926-469de0301955 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
@@ -63,7 +61,6 @@ require (
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/jaytaylor/html2text v0.0.0-20200412013138-3577fbdbcff7 // indirect
@@ -81,6 +78,7 @@ require (
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
+	github.com/meguminnnnnnnnn/go-openai v0.0.0-20250408071642-761325becfd6 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.5.6 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
