@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController, mc *controller.ModelController) {
+func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController, mc *controller.ModelController, ac *controller.AgentController) {
 	api := r.Group("/api")
 	{
 
@@ -58,6 +58,16 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			model.GET("/get", mc.GetModel)
 			model.GET("/page", mc.PageModels)
 			model.GET("/list", mc.ListModels)
+		}
+		agent := api.Group("agent")
+		agent.Use(middleware.JWTAuth())
+		{
+			agent.POST("/create", ac.CreateAgent)
+			agent.PUT("/update", ac.UpdateAgent)
+			agent.DELETE("/delete", ac.DeleteAgent)
+			agent.GET("/get", ac.GetAgent)
+			agent.GET("/page", ac.PageAgents)
+			agent.POST("/execute/:id", ac.ExecuteAgent)
 		}
 	}
 }
