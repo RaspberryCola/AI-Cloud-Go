@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	mcpp "github.com/cloudwego/eino-ext/components/tool/mcp"
 	"github.com/cloudwego/eino/components/prompt"
 	"github.com/cloudwego/eino/components/tool"
@@ -19,7 +21,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
-	"time"
 )
 
 const (
@@ -98,7 +99,7 @@ func (s *agentService) ExecuteAgent(ctx context.Context, userID uint, agentID st
 
 	graph, err := s.buildGraph(ctx, userID, agentSchema)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("buildGraph失败：%w", err)
 	}
 
 	runner, err := graph.Compile(ctx, compose.WithGraphName("EinoAgent"), compose.WithNodeTriggerMode(compose.AllPredecessor))
@@ -188,14 +189,29 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		tools = append(tools, mcppTools...)
 	}
 
-	// 构建Agent
-	agt, err := react.NewAgent(ctx, &react.AgentConfig{
+	// 准备Agent配置
+	agentConfig := &react.AgentConfig{
 		ToolCallingModel: llm,
-		ToolsConfig: compose.ToolsNodeConfig{
+		MaxStep:          10,
+	}
+
+	// 只有在tools不为空时才绑定ToolsConfig
+	if len(tools) > 0 {
+		agentConfig.ToolsConfig = compose.ToolsNodeConfig{
 			Tools: tools,
-		},
-		MaxStep: 10,
-	})
+		}
+	}
+
+	// 构建Agent
+	agt, err := react.NewAgent(ctx, agentConfig)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create agent: %w", err)
+	}
+	// Add this check:
+	if agt == nil {
+		return nil, errors.New("react.NewAgent returned a nil agent instance")
+	}
 
 	agentLambda, _ := compose.AnyLambda(agt.Generate, agt.Stream, nil, nil)
 
