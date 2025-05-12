@@ -7,6 +7,10 @@ import (
 	"ai-cloud/pkgs/errcode"
 	"ai-cloud/pkgs/response"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -283,4 +287,66 @@ func (c *AgentController) ExecuteAgent(ctx *gin.Context) {
 	}
 
 	response.SuccessWithMessage(ctx, "Agent executed successfully", gin.H{"result": result})
+}
+
+// StreamExecuteAgent handles streaming agent execution requests
+func (c *AgentController) StreamExecuteAgent(ctx *gin.Context) {
+	// Get user ID from context
+	userID, err := utils.GetUserIDFromContext(ctx)
+	if err != nil {
+		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "Failed to get user")
+		return
+	}
+
+	agentID := ctx.Param("id")
+	if agentID == "" {
+		response.ParamError(ctx, errcode.ParamBindError, "Agent ID is required")
+		return
+	}
+
+	var req model.UserMessage
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		response.ParamError(ctx, errcode.ParamBindError, "Parameter error: "+err.Error())
+		return
+	}
+
+	msgReader, err := c.svc.StreamExecuteAgent(ctx.Request.Context(), userID, agentID, req)
+	if err != nil {
+		response.InternalError(ctx, errcode.InternalServerError, "Agent execution failed: "+err.Error())
+		return
+	}
+
+	// Set headers for SSE
+	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
+	ctx.Writer.Header().Set("Cache-Control", "no-cache")
+	ctx.Writer.Header().Set("Connection", "keep-alive")
+	ctx.Writer.Header().Set("Transfer-Encoding", "chunked")
+
+	ctx.Writer.Flush()
+
+	// Stream the response
+	for {
+		msg, err := msgReader.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// Reached end of stream
+				break
+			}
+			// Handle error
+			ctx.Writer.WriteString("event: error\n")
+			ctx.Writer.WriteString(fmt.Sprintf("data: %s\n\n", err.Error()))
+			ctx.Writer.Flush()
+			return
+		}
+
+		// Write message to client
+		ctx.Writer.WriteString("event: message\n")
+		ctx.Writer.WriteString(fmt.Sprintf("data: %s\n\n", msg.Content))
+		ctx.Writer.Flush()
+	}
+
+	// Signal end of stream
+	ctx.Writer.WriteString("event: done\n")
+	ctx.Writer.WriteString("data: \n\n")
+	ctx.Writer.Flush()
 }

@@ -40,6 +40,7 @@ type AgentService interface {
 	ListAgents(ctx context.Context, userID uint) ([]*model.Agent, error)
 	PageAgents(ctx context.Context, userID uint, page, size int) ([]*model.Agent, int64, error)
 	ExecuteAgent(ctx context.Context, userID uint, agentID string, msg model.UserMessage) (string, error)
+	StreamExecuteAgent(ctx context.Context, userID uint, agentID string, msg model.UserMessage) (*schema.StreamReader[*schema.Message], error)
 }
 
 type agentService struct {
@@ -113,6 +114,33 @@ func (s *agentService) ExecuteAgent(ctx context.Context, userID uint, agentID st
 		return "", err
 	}
 	return res.String(), nil
+}
+
+func (s *agentService) StreamExecuteAgent(ctx context.Context, userID uint, agentID string, msg model.UserMessage) (*schema.StreamReader[*schema.Message], error) {
+	// Retrieve the agent
+	agent, err := s.dao.GetByID(ctx, userID, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse the agent schema
+	var agentSchema model.AgentSchema
+	if err := json.Unmarshal([]byte(agent.AgentSchema), &agentSchema); err != nil {
+		return nil, err
+	}
+
+	graph, err := s.buildGraph(ctx, userID, agentSchema)
+	if err != nil {
+		return nil, fmt.Errorf("buildGraph失败：%w", err)
+	}
+
+	runner, err := graph.Compile(ctx, compose.WithGraphName("EinoAgent"), compose.WithNodeTriggerMode(compose.AllPredecessor))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return runner.Stream(ctx, &msg)
 }
 
 func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema model.AgentSchema) (*compose.Graph[*model.UserMessage, *schema.Message], error) {
