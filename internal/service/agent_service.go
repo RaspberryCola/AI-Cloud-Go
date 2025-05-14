@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	mcpp "github.com/cloudwego/eino-ext/components/tool/mcp"
@@ -117,34 +118,75 @@ func (s *agentService) ExecuteAgent(ctx context.Context, userID uint, agentID st
 }
 
 func (s *agentService) StreamExecuteAgent(ctx context.Context, userID uint, agentID string, msg model.UserMessage) (*schema.StreamReader[*schema.Message], error) {
-	// Retrieve the agent
+	// 1.获取Agent配置
 	agent, err := s.dao.GetByID(ctx, userID, agentID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the agent schema
 	var agentSchema model.AgentSchema
 	if err := json.Unmarshal([]byte(agent.AgentSchema), &agentSchema); err != nil {
 		return nil, err
 	}
 
+	// 2.构建Graph
 	graph, err := s.buildGraph(ctx, userID, agentSchema)
 	if err != nil {
-		return nil, fmt.Errorf("buildGraph失败：%w", err)
+		return nil, fmt.Errorf("failed to build agent graph：%w", err)
 	}
 
+	// 3.构建runner
 	runner, err := graph.Compile(ctx, compose.WithGraphName("EinoAgent"), compose.WithNodeTriggerMode(compose.AllPredecessor))
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to compile agent graph: %w", err)
 	}
 
-	return runner.Stream(ctx, &msg)
+	// TODO：实现callbacks，compose.WithCallbacks
+	sr, err := runner.Stream(ctx, &msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stream: %w", err)
+	}
+
+	srs := sr.Copy(2)
+
+	// TODO:实现历史消息记录
+	go func() {
+		fullMsgs := make([]*schema.Message, 0)
+
+		defer func() {
+			srs[1].Close()
+			// 添加历史记录
+			fullMsg, err := schema.ConcatMessages(fullMsgs)
+			if err != nil {
+				fmt.Println("error concatenating messages: ", err.Error())
+			}
+			fmt.Println("fullMsg: ", fullMsg)
+		}()
+
+	outer:
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("context done", ctx.Err())
+				return
+			default:
+				chunk, err := srs[1].Recv()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						break outer
+					}
+				}
+
+				fullMsgs = append(fullMsgs, chunk)
+			}
+		}
+	}()
+
+	return srs[0], nil
 }
 
 func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema model.AgentSchema) (*compose.Graph[*model.UserMessage, *schema.Message], error) {
-	// 获取LLM模型
+	// 1. 创建LLM
 	llmModelCfg, err := s.modelSvc.GetModel(ctx, userID, agentSchema.LLMConfig.ModelID)
 	if err != nil {
 		return nil, err
@@ -154,8 +196,9 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		return nil, err
 	}
 
-	// TODO：支持多知识库
-	// 暂时只取一个知识库
+	// 2. 创建知识库检索
+	// 2.1 获取知识库IDs
+	// TODO：当前还不支持跨知识库查询，后续需要修改支持
 	kbIDs := agentSchema.Knowledge.KnowledgeIDs
 	kbID := kbIDs[0]
 	kb, err := s.kbDao.GetKBByID(kbID)
@@ -165,6 +208,7 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	if kb.UserID != userID {
 		return nil, errors.New("无访问权限")
 	}
+	// 2.2 获取Embedding模型
 	embedModel, err := s.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
 	if err != nil {
 		return nil, fmt.Errorf("获取嵌入模型失败: %w", err)
@@ -178,7 +222,7 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	if err != nil {
 		return nil, fmt.Errorf("创建embedding服务实例失败: %w", err)
 	}
-
+	// 2.3 创建Retriever
 	retrieverConf := &mretriever.MilvusRetrieverConfig{
 		Client:         database.GetMilvusClient(),
 		Embedding:      embeddingService,
@@ -191,9 +235,9 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 
 	retriever, err := mretriever.NewMilvusRetriever(ctx, retrieverConf)
 
-	// 加载MCPTools
+	// 3. 构建Tools
 	tools := []tool.BaseTool{}
-
+	// 3.1 加载MCPTools
 	for _, serverURL := range agentSchema.MCP.Servers {
 		cli, err := client.NewSSEMCPClient(serverURL)
 		err = cli.Start(ctx)
@@ -216,13 +260,13 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		}
 		tools = append(tools, mcppTools...)
 	}
+	// 3.2 加载系统和用户自定义Tools
 
-	// 准备Agent配置
+	// 4. 构建Agent
 	agentConfig := &react.AgentConfig{
 		ToolCallingModel: llm,
 		MaxStep:          10,
 	}
-
 	// 只有在tools不为空时才绑定ToolsConfig
 	if len(tools) > 0 {
 		agentConfig.ToolsConfig = compose.ToolsNodeConfig{
@@ -230,21 +274,18 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		}
 	}
 
-	// 构建Agent
 	agt, err := react.NewAgent(ctx, agentConfig)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create agent: %w", err)
 	}
-	// Add this check:
 	if agt == nil {
 		return nil, errors.New("react.NewAgent returned a nil agent instance")
 	}
 
 	agentLambda, _ := compose.AnyLambda(agt.Generate, agt.Stream, nil, nil)
 
-	// 构建提示词
-
+	// 5. 构建提示词
+	// TODO：实现历史记录机制，优化提示词设计
 	promptTemplate := prompt.FromMessages(
 		schema.FString,
 		schema.SystemMessage(agentSchema.Prompt),
@@ -252,7 +293,7 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		schema.UserMessage("{content}\n 参考信息：{documents}"),
 	)
 
-	// 开始编排
+	// 6. 实现图编排
 	graph := compose.NewGraph[*model.UserMessage, *schema.Message]()
 	_ = graph.AddLambdaNode(InputToQuery, compose.InvokableLambdaWithOption(inputToQueryLambda), compose.WithNodeName("UserMessageToQuery"))
 	_ = graph.AddChatTemplateNode(ChatTemplate, promptTemplate)
@@ -267,6 +308,7 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	_ = graph.AddEdge(InputToHistory, ChatTemplate)
 	_ = graph.AddEdge(ChatTemplate, Agent)
 	_ = graph.AddEdge(Agent, compose.END)
+
 	return graph, nil
 }
 

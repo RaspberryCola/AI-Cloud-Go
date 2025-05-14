@@ -68,18 +68,18 @@ type UpdateAgentRequest struct {
 	Knowledge   KnowledgeConfig `json:"knowledge"`
 }
 
-// PageAgentRequest is used for retrieving a page of agents
 type PageAgentRequest struct {
 	Page int `form:"page,default=1"`
 	Size int `form:"size,default=10"`
 }
 
-//// ExecuteAgentRequest represents a request to execute an agent
-//type ExecuteAgentRequest struct {
-//	UserMessage
-//}
-
 type UserMessage struct {
-	Query   string            `json:"query"`
+	Query   string            `json:"query" binding:"required"`
 	History []*schema.Message `json:"history"`
+}
+
+type ExecuteAgentRequest struct {
+	ID      string      `json:"id" binding:"required"`
+	AgentID string      `json:"agent_id" binding:"required"`
+	Message UserMessage `json:"message" binding:"required"`
 }

@@ -8,8 +8,9 @@ import (
 	"ai-cloud/pkgs/response"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/gin-contrib/sse"
 	"io"
+	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -289,64 +290,71 @@ func (c *AgentController) ExecuteAgent(ctx *gin.Context) {
 	response.SuccessWithMessage(ctx, "Agent executed successfully", gin.H{"result": result})
 }
 
-// StreamExecuteAgent handles streaming agent execution requests
-func (c *AgentController) StreamExecuteAgent(ctx *gin.Context) {
-	// Get user ID from context
-	userID, err := utils.GetUserIDFromContext(ctx)
+// StreamExecuteAgent 处理Agent流式调用
+func (ac *AgentController) StreamExecuteAgent(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
-		response.UnauthorizedError(ctx, errcode.UnauthorizedError, "Failed to get user")
+		log.Printf("[Stream] Error getting user ID: %v\n", err)
+		response.UnauthorizedError(c, errcode.UnauthorizedError, "Failed to get user")
 		return
 	}
 
-	agentID := ctx.Param("id")
-	if agentID == "" {
-		response.ParamError(ctx, errcode.ParamBindError, "Agent ID is required")
+	var req model.ExecuteAgentRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("[Stream] Error binding json: %v\n", err)
+		response.ParamError(c, errcode.ParamBindError, "Parameter error: "+err.Error())
 		return
 	}
 
-	var req model.UserMessage
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		response.ParamError(ctx, errcode.ParamBindError, "Parameter error: "+err.Error())
-		return
-	}
-
-	msgReader, err := c.svc.StreamExecuteAgent(ctx.Request.Context(), userID, agentID, req)
+	sr, err := ac.svc.StreamExecuteAgent(ctx, userID, req.AgentID, req.Message)
 	if err != nil {
-		response.InternalError(ctx, errcode.InternalServerError, "Agent execution failed: "+err.Error())
+		log.Printf("[Stream] Error running agent: %v\n", err)
+		response.InternalError(c, errcode.InternalServerError, "Agent execution failed: "+err.Error())
 		return
 	}
 
 	// Set headers for SSE
-	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
-	ctx.Writer.Header().Set("Cache-Control", "no-cache")
-	ctx.Writer.Header().Set("Connection", "keep-alive")
-	ctx.Writer.Header().Set("Transfer-Encoding", "chunked")
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("Transfer-Encoding", "chunked")
 
-	ctx.Writer.Flush()
+	done := make(chan struct{})
+	defer func() {
+		sr.Close()
+		close(done)
+		log.Printf("[Stream] Finish Stream with ID: %s\n", req.ID)
+	}()
 
 	// Stream the response
-	for {
-		msg, err := msgReader.Recv()
-		if err != nil {
+	c.Stream(func(w io.Writer) bool {
+		select {
+		case <-ctx.Done():
+			log.Printf("[Stream] Context done for chat ID: %s\n", req.ID)
+			return false
+		case <-done:
+			return false
+		default:
+			msg, err := sr.Recv()
 			if errors.Is(err, io.EOF) {
-				// Reached end of stream
-				break
+				log.Printf("[Stream] EOF received for chat ID: %s\n", req.ID)
+				return false
 			}
-			// Handle error
-			ctx.Writer.WriteString("event: error\n")
-			ctx.Writer.WriteString(fmt.Sprintf("data: %s\n\n", err.Error()))
-			ctx.Writer.Flush()
-			return
+			if err != nil {
+				log.Printf("[Stream] Error receiving message: %v\n", err)
+				return false
+			}
+
+			// Send SSE event
+			sse.Encode(w, sse.Event{
+				Data: []byte(msg.Content),
+			})
+
+			// Flush the response immediately
+			c.Writer.Flush()
+			return true
 		}
-
-		// Write message to client
-		ctx.Writer.WriteString("event: message\n")
-		ctx.Writer.WriteString(fmt.Sprintf("data: %s\n\n", msg.Content))
-		ctx.Writer.Flush()
-	}
-
-	// Signal end of stream
-	ctx.Writer.WriteString("event: done\n")
-	ctx.Writer.WriteString("data: \n\n")
-	ctx.Writer.Flush()
+	})
 }

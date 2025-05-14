@@ -68,7 +68,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			agent.GET("/get", ac.GetAgent)
 			agent.GET("/page", ac.PageAgents)
 			agent.POST("/execute/:id", ac.ExecuteAgent)
-			agent.POST("/stream/:id", ac.StreamExecuteAgent)
+			agent.POST("/stream", ac.StreamExecuteAgent)
 		}
 	}
 }
