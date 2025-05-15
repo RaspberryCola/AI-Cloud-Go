@@ -189,11 +189,11 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	// 1. 创建LLM
 	llmModelCfg, err := s.modelSvc.GetModel(ctx, userID, agentSchema.LLMConfig.ModelID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create get model:%w", err)
 	}
 	llm, err := llmfactory.GetLLMClient(ctx, llmModelCfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create llm client:%w", err)
 	}
 
 	// 2. 创建知识库检索
@@ -203,15 +203,15 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	kbID := kbIDs[0]
 	kb, err := s.kbDao.GetKBByID(kbID)
 	if err != nil {
-		return nil, fmt.Errorf("知识库不存在: %w", err)
+		return nil, fmt.Errorf("knowledge base not found: %w", err)
 	}
 	if kb.UserID != userID {
-		return nil, errors.New("无访问权限")
+		return nil, fmt.Errorf("userID mismatch: %w", err)
 	}
 	// 2.2 获取Embedding模型
 	embedModel, err := s.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
 	if err != nil {
-		return nil, fmt.Errorf("获取嵌入模型失败: %w", err)
+		return nil, fmt.Errorf("failed to retrieve embedding model: %w", err)
 	}
 	// TODO: Timeout从配置中获取
 	embeddingService, err := embedding.NewEmbeddingService(
@@ -220,7 +220,7 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		embedding.WithTimeout(30*time.Second),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("创建embedding服务实例失败: %w", err)
+		return nil, fmt.Errorf("failed to initialize embedding service: %w", err)
 	}
 	// 2.3 创建Retriever
 	retrieverConf := &mretriever.MilvusRetrieverConfig{
@@ -234,13 +234,18 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	}
 
 	retriever, err := mretriever.NewMilvusRetriever(ctx, retrieverConf)
-
+	if err != nil {
+		return nil, fmt.Errorf("failed to create retriever: %w", err)
+	}
 	// 3. 构建Tools
 	tools := []tool.BaseTool{}
 	// 3.1 加载MCPTools
 	for _, serverURL := range agentSchema.MCP.Servers {
 		cli, err := client.NewSSEMCPClient(serverURL)
 		err = cli.Start(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create mcp client: %w", err)
+		}
 		initRequest := mcp.InitializeRequest{}
 		initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 		initRequest.Params.ClientInfo = mcp.Implementation{
