@@ -1,11 +1,9 @@
 package service
 
 import (
-	"ai-cloud/internal/component/embedding"
 	llmfactory "ai-cloud/internal/component/llm"
 	mretriever "ai-cloud/internal/component/retriever/milvus"
 	"ai-cloud/internal/dao"
-	"ai-cloud/internal/database"
 	"ai-cloud/internal/model"
 	"context"
 	"encoding/json"
@@ -162,47 +160,16 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		return nil, fmt.Errorf("failed to create llm client:%w", err)
 	}
 
-	// 2. 创建知识库检索
-	// 2.1 获取知识库IDs
-	// TODO：当前还不支持跨知识库查询，后续需要修改支持
-	kbIDs := agentSchema.Knowledge.KnowledgeIDs
-	kbID := kbIDs[0]
-	kb, err := s.kbDao.GetKBByID(kbID)
-	if err != nil {
-		return nil, fmt.Errorf("knowledge base not found: %w", err)
-	}
-	if kb.UserID != userID {
-		return nil, fmt.Errorf("userID mismatch: %w", err)
-	}
-	// 2.2 获取Embedding模型
-	embedModel, err := s.modelDao.GetByID(ctx, userID, kb.EmbedModelID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve embedding model: %w", err)
-	}
-	// TODO: Timeout从配置中获取
-	embeddingService, err := embedding.NewEmbeddingService(
-		ctx,
-		embedModel,
-		embedding.WithTimeout(30*time.Second),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize embedding service: %w", err)
-	}
-	// 2.3 创建Retriever
-	retrieverConf := &mretriever.MilvusRetrieverConfig{
-		Client:         database.GetMilvusClient(),
-		Embedding:      embeddingService,
-		Collection:     kb.MilvusCollection,
-		KBIDs:          []string{kbID}, //TODO:后续需要考虑到不同知识库用的嵌入模型是不同的！
-		SearchFields:   nil,
-		TopK:           3,
-		ScoreThreshold: 0,
+	// 2. 构建 Retriever
+	multiRetriever := mretriever.MultiKBRetriever{
+		KBIDs:    agentSchema.Knowledge.KnowledgeIDs,
+		UserID:   userID,
+		KBDao:    s.kbDao,
+		ModelDao: s.modelDao,
+		Ctx:      ctx,
+		TopK:     agentSchema.Knowledge.TopK, // 默认返回前5个最相关的文档
 	}
 
-	retriever, err := mretriever.NewMilvusRetriever(ctx, retrieverConf)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create retriever: %w", err)
-	}
 	// 3. 构建Tools
 	tools := []tool.BaseTool{}
 	// 3.1 加载MCPTools
@@ -233,6 +200,8 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	}
 	// 3.2 加载系统和用户自定义Tools
 
+	// 3.3 校验Tools
+
 	// 4. 构建Agent
 	agentConfig := &react.AgentConfig{
 		ToolCallingModel: llm,
@@ -256,19 +225,19 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	agentLambda, _ := compose.AnyLambda(agt.Generate, agt.Stream, nil, nil)
 
 	// 5. 构建提示词
-	// TODO：实现历史记录机制，优化提示词设计
+	// TODO：优化提示词设计
 	promptTemplate := prompt.FromMessages(
 		schema.FString,
 		schema.SystemMessage(agentSchema.Prompt),
 		schema.MessagesPlaceholder("history", true),
-		schema.UserMessage("{content}\n 参考信息：{documents}"),
+		schema.UserMessage("用户消息：{query}\n 参考信息：{documents}"),
 	)
 
 	// 6. 实现图编排
 	graph := compose.NewGraph[*model.UserMessage, *schema.Message]()
 	_ = graph.AddLambdaNode(InputToQuery, compose.InvokableLambdaWithOption(inputToQueryLambda), compose.WithNodeName("UserMessageToQuery"))
 	_ = graph.AddChatTemplateNode(ChatTemplate, promptTemplate)
-	_ = graph.AddRetrieverNode(Retriever, retriever, compose.WithOutputKey("documents"))
+	_ = graph.AddRetrieverNode(Retriever, multiRetriever, compose.WithOutputKey("documents"))
 	_ = graph.AddLambdaNode(Agent, agentLambda, compose.WithNodeName("Agent"))
 	_ = graph.AddLambdaNode(InputToHistory, compose.InvokableLambdaWithOption(inputToHistoryLambda), compose.WithNodeName("UserMessageToHistory"))
 
@@ -291,7 +260,7 @@ func inputToQueryLambda(ctx context.Context, input *model.UserMessage, opts ...a
 // inputToHistoryLambda component initialization function of node 'InputToHistory' in graph 'EinoAgent'
 func inputToHistoryLambda(ctx context.Context, input *model.UserMessage, opts ...any) (output map[string]any, err error) {
 	return map[string]any{
-		"content": input.Query,
+		"query":   input.Query,
 		"history": input.History,
 		"date":    time.Now().Format(time.DateTime),
 	}, nil

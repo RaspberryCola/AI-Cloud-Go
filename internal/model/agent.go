@@ -48,6 +48,7 @@ type ToolsConfig struct {
 // KnowledgeConfig Agent关联的知识库IDs
 type KnowledgeConfig struct {
 	KnowledgeIDs []string `json:"knowledge_ids"`
+	TopK         int      `json:"top_k"`
 }
 
 // CreateAgentRequest 创建Agent请求
