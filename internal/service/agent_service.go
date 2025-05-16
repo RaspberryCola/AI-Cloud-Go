@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	mcpp "github.com/cloudwego/eino-ext/components/tool/mcp"
@@ -45,20 +44,22 @@ type AgentService interface {
 }
 
 type agentService struct {
-	dao      dao.AgentDao
-	modelSvc ModelService
-	kbSvc    KBService
-	kbDao    dao.KnowledgeBaseDao
-	modelDao dao.ModelDao
+	dao        dao.AgentDao
+	modelSvc   ModelService
+	kbSvc      KBService
+	kbDao      dao.KnowledgeBaseDao
+	modelDao   dao.ModelDao
+	historySvc HistoryService
 }
 
-func NewAgentService(dao dao.AgentDao, modelSvc ModelService, kbSvc KBService, kbDao dao.KnowledgeBaseDao, modelDao dao.ModelDao) AgentService {
+func NewAgentService(dao dao.AgentDao, modelSvc ModelService, kbSvc KBService, kbDao dao.KnowledgeBaseDao, modelDao dao.ModelDao, historySvc HistoryService) AgentService {
 	return &agentService{
-		dao:      dao,
-		modelSvc: modelSvc,
-		kbSvc:    kbSvc,
-		kbDao:    kbDao,
-		modelDao: modelDao,
+		dao:        dao,
+		modelSvc:   modelSvc,
+		kbSvc:      kbSvc,
+		kbDao:      kbDao,
+		modelDao:   modelDao,
+		historySvc: historySvc,
 	}
 }
 
@@ -141,48 +142,13 @@ func (s *agentService) StreamExecuteAgent(ctx context.Context, userID uint, agen
 		return nil, fmt.Errorf("failed to compile agent graph: %w", err)
 	}
 
-	// TODO：实现callbacks，compose.WithCallbacks
+	// 执行stream
 	sr, err := runner.Stream(ctx, &msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stream: %w", err)
 	}
 
-	srs := sr.Copy(2)
-
-	// TODO:实现历史消息记录
-	go func() {
-		fullMsgs := make([]*schema.Message, 0)
-
-		defer func() {
-			srs[1].Close()
-			// 添加历史记录
-			fullMsg, err := schema.ConcatMessages(fullMsgs)
-			if err != nil {
-				fmt.Println("error concatenating messages: ", err.Error())
-			}
-			fmt.Println("fullMsg: ", fullMsg)
-		}()
-
-	outer:
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("context done", ctx.Err())
-				return
-			default:
-				chunk, err := srs[1].Recv()
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						break outer
-					}
-				}
-
-				fullMsgs = append(fullMsgs, chunk)
-			}
-		}
-	}()
-
-	return srs[0], nil
+	return sr, nil
 }
 
 func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema model.AgentSchema) (*compose.Graph[*model.UserMessage, *schema.Message], error) {

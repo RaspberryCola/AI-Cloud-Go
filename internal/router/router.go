@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController, mc *controller.ModelController, ac *controller.AgentController) {
+func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.FileController, kc *controller.KBController, mc *controller.ModelController, ac *controller.AgentController, cc *controller.ConversationController) {
 	api := r.Group("/api")
 	{
 
@@ -69,6 +69,18 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			agent.GET("/page", ac.PageAgents)
 			agent.POST("/execute/:id", ac.ExecuteAgent)
 			agent.POST("/stream", ac.StreamExecuteAgent)
+		}
+		conv := api.Group("chat")
+		conv.Use(middleware.JWTAuth())
+		{
+			// 调试模式，不保存历史
+			conv.POST("/debug", cc.DebugStreamAgent)
+			// 会话相关功能
+			conv.POST("/create", cc.CreateConversation)
+			conv.POST("/stream", cc.StreamConversation)
+			conv.GET("/list", cc.ListConversations)
+			conv.GET("/agent/list", cc.ListAgentConversations)
+			conv.GET("/history", cc.GetConversationHistory)
 		}
 	}
 }

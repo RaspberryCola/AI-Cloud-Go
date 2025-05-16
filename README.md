@@ -222,3 +222,15 @@ After starting the app, you can test APIs like:
 - Replace sample API keys in config.yaml with your own credentials before production
 - Ensure config.yaml reflects Docker service addresses
 - Go server uses port 8080; Ollama uses 11434 – avoid conflicts
+
+
+## Third-Party Licenses
+
+This project uses the following third-party libraries:
+
+- **eino-history**
+   - Source: [https://github.com/HildaM/eino-history ](https://github.com/HildaM/eino-history )
+   - License: [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0 )
+   - Description: A chat history management library for Eino large model framework.
+
+Modifications have been made to the original code to suit the needs of this project.
