@@ -76,7 +76,7 @@ func (d *agentDao) Page(ctx context.Context, userID uint, page, size int) ([]*mo
 	var agents []*model.Agent
 	var count int64
 
-	db := d.db.WithContext(ctx).Model(&model.Agent{}).Where("user_id = ?", userID)
+	db := d.db.WithContext(ctx).Model(&model.Agent{}).Where("user_id = ?", userID).Order("updated_at desc")
 
 	err := db.Count(&count).Error
 	if err != nil {

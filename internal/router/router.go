@@ -63,7 +63,7 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 		agent.Use(middleware.JWTAuth())
 		{
 			agent.POST("/create", ac.CreateAgent)
-			agent.PUT("/update", ac.UpdateAgent)
+			agent.POST("/update", ac.UpdateAgent)
 			agent.DELETE("/delete", ac.DeleteAgent)
 			agent.GET("/get", ac.GetAgent)
 			agent.GET("/page", ac.PageAgents)
