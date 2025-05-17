@@ -200,32 +200,7 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 	}
 	// 3.2 加载系统和用户自定义Tools
 
-	// 3.3 校验Tools
-
-	// 4. 构建Agent
-	agentConfig := &react.AgentConfig{
-		ToolCallingModel: llm,
-		MaxStep:          10,
-	}
-	// 只有在tools不为空时才绑定ToolsConfig
-	if len(tools) > 0 {
-		agentConfig.ToolsConfig = compose.ToolsNodeConfig{
-			Tools: tools,
-		}
-	}
-
-	agt, err := react.NewAgent(ctx, agentConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create agent: %w", err)
-	}
-	if agt == nil {
-		return nil, errors.New("react.NewAgent returned a nil agent instance")
-	}
-
-	agentLambda, _ := compose.AnyLambda(agt.Generate, agt.Stream, nil, nil)
-
-	// 5. 构建提示词
-	// TODO：优化提示词设计
+	// 4. 构建提示词
 	promptTemplate := prompt.FromMessages(
 		schema.FString,
 		schema.SystemMessage(agentSchema.Prompt),
@@ -233,21 +208,55 @@ func (s *agentService) buildGraph(ctx context.Context, userID uint, agentSchema 
 		schema.UserMessage("用户消息：{query}\n 参考信息：{documents}"),
 	)
 
-	// 6. 实现图编排
+	// 5. 实现图编排
 	graph := compose.NewGraph[*model.UserMessage, *schema.Message]()
 	_ = graph.AddLambdaNode(InputToQuery, compose.InvokableLambdaWithOption(inputToQueryLambda), compose.WithNodeName("UserMessageToQuery"))
 	_ = graph.AddChatTemplateNode(ChatTemplate, promptTemplate)
 	_ = graph.AddRetrieverNode(Retriever, multiRetriever, compose.WithOutputKey("documents"))
-	_ = graph.AddLambdaNode(Agent, agentLambda, compose.WithNodeName("Agent"))
 	_ = graph.AddLambdaNode(InputToHistory, compose.InvokableLambdaWithOption(inputToHistoryLambda), compose.WithNodeName("UserMessageToHistory"))
 
-	_ = graph.AddEdge(compose.START, InputToQuery)
-	_ = graph.AddEdge(compose.START, InputToHistory)
-	_ = graph.AddEdge(InputToQuery, Retriever)
-	_ = graph.AddEdge(Retriever, ChatTemplate)
-	_ = graph.AddEdge(InputToHistory, ChatTemplate)
-	_ = graph.AddEdge(ChatTemplate, Agent)
-	_ = graph.AddEdge(Agent, compose.END)
+	// 根据是否有工具决定使用Agent还是直接使用ChatModel
+	if len(tools) > 0 {
+		// 有工具时使用Agent
+		agentConfig := &react.AgentConfig{
+			ToolCallingModel: llm,
+			MaxStep:          10,
+			ToolsConfig: compose.ToolsNodeConfig{
+				Tools: tools,
+			},
+		}
+
+		agt, err := react.NewAgent(ctx, agentConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create agent: %w", err)
+		}
+		if agt == nil {
+			return nil, errors.New("react.NewAgent returned a nil agent instance")
+		}
+
+		agentLambda, _ := compose.AnyLambda(agt.Generate, agt.Stream, nil, nil)
+
+		_ = graph.AddLambdaNode(Agent, agentLambda, compose.WithNodeName("Agent"))
+
+		_ = graph.AddEdge(compose.START, InputToQuery)
+		_ = graph.AddEdge(compose.START, InputToHistory)
+		_ = graph.AddEdge(InputToQuery, Retriever)
+		_ = graph.AddEdge(Retriever, ChatTemplate)
+		_ = graph.AddEdge(InputToHistory, ChatTemplate)
+		_ = graph.AddEdge(ChatTemplate, Agent)
+		_ = graph.AddEdge(Agent, compose.END)
+	} else {
+		// 没有工具时直接使用ChatModel
+		_ = graph.AddChatModelNode(ChatModel, llm)
+
+		_ = graph.AddEdge(compose.START, InputToQuery)
+		_ = graph.AddEdge(compose.START, InputToHistory)
+		_ = graph.AddEdge(InputToQuery, Retriever)
+		_ = graph.AddEdge(Retriever, ChatTemplate)
+		_ = graph.AddEdge(InputToHistory, ChatTemplate)
+		_ = graph.AddEdge(ChatTemplate, ChatModel)
+		_ = graph.AddEdge(ChatModel, compose.END)
+	}
 
 	return graph, nil
 }

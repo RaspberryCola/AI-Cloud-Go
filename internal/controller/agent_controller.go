@@ -23,7 +23,7 @@ func NewAgentController(svc service.AgentService) *AgentController {
 	return &AgentController{svc: svc}
 }
 
-// CreateAgent handles initial agent creation with just name and description
+// CreateAgent 创建agent
 func (c *AgentController) CreateAgent(ctx *gin.Context) {
 	// Get user ID from context
 	userID, err := utils.GetUserIDFromContext(ctx)
@@ -44,7 +44,7 @@ func (c *AgentController) CreateAgent(ctx *gin.Context) {
 		MCP:       model.MCPConfig{Servers: []string{}},
 		Tools:     model.ToolsConfig{ToolIDs: []string{}},
 		Prompt:    "",
-		Knowledge: model.KnowledgeConfig{KnowledgeIDs: []string{}},
+		Knowledge: model.KnowledgeConfig{KnowledgeIDs: []string{}, TopK: 3},
 	}
 
 	// Convert to JSON string
@@ -71,7 +71,7 @@ func (c *AgentController) CreateAgent(ctx *gin.Context) {
 	response.SuccessWithMessage(ctx, "Agent created successfully", gin.H{"id": agent.ID})
 }
 
-// UpdateAgent handles full agent configuration update
+// UpdateAgent 更新agent
 func (c *AgentController) UpdateAgent(ctx *gin.Context) {
 	// Get user ID from context
 	userID, err := utils.GetUserIDFromContext(ctx)
@@ -152,7 +152,7 @@ func (c *AgentController) UpdateAgent(ctx *gin.Context) {
 	response.SuccessWithMessage(ctx, "Agent updated successfully", nil)
 }
 
-// DeleteAgent handles agent deletion requests
+// DeleteAgent 删除agent
 func (c *AgentController) DeleteAgent(ctx *gin.Context) {
 	// Get user ID from context
 	userID, err := utils.GetUserIDFromContext(ctx)
@@ -215,7 +215,7 @@ func (c *AgentController) GetAgent(ctx *gin.Context) {
 	})
 }
 
-// PageAgents handles paginated agent list requests
+// PageAgents 分页查询
 func (c *AgentController) PageAgents(ctx *gin.Context) {
 	// Get user ID from context
 	userID, err := utils.GetUserIDFromContext(ctx)
@@ -260,7 +260,7 @@ func (c *AgentController) PageAgents(ctx *gin.Context) {
 	response.PageSuccess(ctx, agentsResponse, count)
 }
 
-// ExecuteAgent handles agent execution requests
+// ExecuteAgent 执行Agent
 func (c *AgentController) ExecuteAgent(ctx *gin.Context) {
 	// Get user ID from context
 	userID, err := utils.GetUserIDFromContext(ctx)
@@ -290,7 +290,7 @@ func (c *AgentController) ExecuteAgent(ctx *gin.Context) {
 	response.SuccessWithMessage(ctx, "Agent executed successfully", gin.H{"result": result})
 }
 
-// StreamExecuteAgent 处理Agent流式调用
+// StreamExecuteAgent 流式执行Agent
 func (ac *AgentController) StreamExecuteAgent(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID, err := utils.GetUserIDFromContext(c)
