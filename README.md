@@ -10,7 +10,17 @@ AI-Cloud-Go 是一个基于 Go 语言实现的LLM应用于开发系统，提供�
 </svg> [AI-Cloud-Frontend](https://github.com/RaspberryCola/AI-Cloud-Frontend)
 
 
-## 主要功能
+## 功能说明
+
+### 部分功能展示
+
+**Agent配置**
+
+![](./docs/AgentDebug.png)
+
+**Agent Chat**
+![](./docs/AgentChat.png)
+
 **已经实现：**
 
 - [x] 用户模块：支持用户注册、登录、认证
@@ -22,21 +32,11 @@ AI-Cloud-Go 是一个基于 Go 语言实现的LLM应用于开发系统，提供�
   - [x] 支持自定义LLM、知识库、MCP
   - [x] 对话界面、历史对话
 
-
 **未来优化**
 
-- [ ] 知识库模块：
-  - [ ] 多文件上传
-  - [ ] 优化解析状态处理
-  - [ ] 支持Rerank
-
-- [ ] Agent模块：
-  - [ ] 自定义Tool（HTTP工具）
-  - [ ] 优化LLM的参数配置
-  - [ ] 跨知识库检索的Rerank实现
-- [ ] 模型管理：
-  - [ ] 添加常用模型预设：OpenAI，DeepSeek，火山引擎等
-  - [ ] 支持Rerank模型
+- 知识库模块：多文件上传/优化解析状态处理/支持Rerank
+- Agent模块：自定义Tool（HTTP工具）/优化LLM的参数配置/跨知识库检索的Rerank实现
+- 模型管理：添加常用模型预设：OpenAI，DeepSeek，火山引擎等/支持Rerank模型
 
 ## 技术栈
 - 后端框架：Gin
