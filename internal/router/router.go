@@ -79,8 +79,9 @@ func SetUpRouters(r *gin.Engine, uc *controller.UserController, fc *controller.F
 			conv.POST("/create", cc.CreateConversation)
 			conv.POST("/stream", cc.StreamConversation)
 			conv.GET("/list", cc.ListConversations)
-			conv.GET("/agent/list", cc.ListAgentConversations)
+			conv.GET("/list/agent", cc.ListAgentConversations)
 			conv.GET("/history", cc.GetConversationHistory)
+			conv.DELETE("/delete", cc.DeleteConversation)
 		}
 	}
 }

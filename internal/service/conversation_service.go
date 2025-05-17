@@ -25,6 +25,9 @@ type ConversationService interface {
 	// 创建新会话
 	CreateConversation(ctx context.Context, userID uint, agentID string) (string, error)
 
+	// 删除会话
+	DeleteConversation(ctx context.Context, convID string) error
+
 	// 列出用户所有会话
 	ListConversations(ctx context.Context, userID uint, page, size int) ([]*model.Conversation, int64, error)
 
@@ -197,4 +200,9 @@ func (s *conversationService) ListAgentConversations(ctx context.Context, userID
 // GetConversationHistory 获取会话历史消息
 func (s *conversationService) GetConversationHistory(ctx context.Context, convID string, limit int) ([]*schema.Message, error) {
 	return s.historySvc.GetHistory(ctx, convID, limit)
+}
+
+// DeleteConversation 删除会话
+func (s *conversationService) DeleteConversation(ctx context.Context, convID string) error {
+	return s.historySvc.DeleteConversation(ctx, convID)
 }

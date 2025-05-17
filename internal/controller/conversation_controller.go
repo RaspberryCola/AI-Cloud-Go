@@ -267,3 +267,24 @@ func (c *ConversationController) GetConversationHistory(ctx *gin.Context) {
 	// 返回历史消息
 	response.SuccessWithMessage(ctx, "Conversation history retrieved successfully", gin.H{"messages": msgs})
 }
+
+// DeleteConversation 删除会话
+func (c *ConversationController) DeleteConversation(ctx *gin.Context) {
+	// 获取会话ID
+	convID := ctx.Query("conv_id")
+	if convID == "" {
+		response.ParamError(ctx, errcode.ParamBindError, "Conversation ID is required")
+		return
+	}
+
+	// 删除会话
+	err := c.svc.DeleteConversation(ctx.Request.Context(), convID)
+	if err != nil {
+		log.Printf("[Conversation Delete] Error deleting conversation: %v\n", err)
+		response.InternalError(ctx, errcode.InternalServerError, "Failed to delete conversation: "+err.Error())
+		return
+	}
+
+	// 返回成功消息
+	response.SuccessWithMessage(ctx, "Conversation deleted successfully", nil)
+}

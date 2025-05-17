@@ -15,6 +15,7 @@ type HistoryService interface {
 	GetHistory(ctx context.Context, convID string, limit int) ([]*schema.Message, error)
 	CreateConversation(ctx context.Context, conv *model.Conversation) error
 	UpdateConversation(ctx context.Context, conv *model.Conversation) error
+	DeleteConversation(ctx context.Context, convID string) error
 	ArchiveConversation(ctx context.Context, convID string) error
 	UnArchiveConversation(ctx context.Context, convID string) error
 	PinConversation(ctx context.Context, convID string) error
@@ -130,4 +131,26 @@ func (s *history) ListConversationsByAgent(ctx context.Context, userID uint, age
 		return nil, 0, fmt.Errorf("failed to list conversations by agent: %w", err)
 	}
 	return convs, count, nil
+}
+
+// DeleteConversation 删除会话
+func (s *history) DeleteConversation(ctx context.Context, convID string) error {
+	// 先获取会话的所有消息
+	msgs, err := s.msgDao.ListByConvID(ctx, convID)
+	if err != nil {
+		return fmt.Errorf("failed to list messages for conversation: %w", err)
+	}
+
+	// 删除会话的所有消息
+	for _, msg := range msgs {
+		if err := s.msgDao.Delete(ctx, msg.MsgID); err != nil {
+			return fmt.Errorf("failed to delete message: %w", err)
+		}
+	}
+
+	// 删除会话
+	if err := s.convDao.Delete(ctx, convID); err != nil {
+		return fmt.Errorf("failed to delete conversation: %w", err)
+	}
+	return nil
 }
