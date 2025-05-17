@@ -107,7 +107,7 @@ func (c *ConversationController) CreateConversation(ctx *gin.Context) {
 	// 创建会话
 	convID, err := c.svc.CreateConversation(ctx.Request.Context(), userID, req.AgentID)
 	if err != nil {
-		log.Printf("[Create] Error creating conversation: %v\n", err)
+		log.Printf("[Conversation Create] Error creating conversation: %v\n", err)
 		response.InternalError(ctx, errcode.InternalServerError, "Failed to create conversation")
 		return
 	}
@@ -127,6 +127,16 @@ func (c *ConversationController) StreamConversation(ctx *gin.Context) {
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		response.ParamError(ctx, errcode.ParamBindError, "Parameter error: "+err.Error())
 		return
+	}
+
+	if req.ConvID == "" {
+		convID, err := c.svc.CreateConversation(ctx.Request.Context(), userID, req.AgentID)
+		if err != nil {
+			log.Printf("[Conversation Create] Error creating conversation: %v\n", err)
+			response.InternalError(ctx, errcode.InternalServerError, "Failed to create conversation")
+			return
+		}
+		req.ConvID = convID
 	}
 
 	// 调用会话模式流式处理

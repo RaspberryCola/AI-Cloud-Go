@@ -53,7 +53,7 @@ func (s *history) GetHistory(ctx context.Context, convID string, limit int) ([]*
 	if limit == 0 {
 		limit = 50
 	}
-	_, err := s.convDao.FirstOrCreate(ctx, convID)
+	_, err := s.convDao.GetByID(ctx, convID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get conversation: %w", err)
 	}
@@ -68,7 +68,7 @@ func (s *history) GetHistory(ctx context.Context, convID string, limit int) ([]*
 
 // CreateConversation 创建会话
 func (s *history) CreateConversation(ctx context.Context, conv *model.Conversation) error {
-	if err := s.convDao.Create(ctx, conv); err != nil {
+	if err := s.convDao.FirstOrCreate(ctx, conv); err != nil {
 		return fmt.Errorf("failed to create conversation: %w", err)
 	}
 	return nil

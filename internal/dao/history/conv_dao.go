@@ -20,7 +20,7 @@ type ConvDao interface {
 	Update(ctx context.Context, conv *model.Conversation) error
 	Delete(ctx context.Context, convID string) error
 	GetByID(ctx context.Context, convID string) (*model.Conversation, error)
-	FirstOrCreate(ctx context.Context, convID string) (*model.Conversation, error)
+	FirstOrCreate(ctx context.Context, conv *model.Conversation) error
 	Page(ctx context.Context, userID uint, page, size int) ([]*model.Conversation, int64, error)
 	PageByAgent(ctx context.Context, userID uint, agentID string, page, size int) ([]*model.Conversation, int64, error)
 	Archive(ctx context.Context, convID string) error
@@ -81,13 +81,12 @@ func (d *convDao) GetByID(ctx context.Context, convID string) (*model.Conversati
 }
 
 // FirstOrCreate 根据ID获取一个会话，如果会话不存在则创建一个
-func (d *convDao) FirstOrCreate(ctx context.Context, convID string) (*model.Conversation, error) {
-	var conv model.Conversation
-	err := d.db.WithContext(ctx).Where("conv_id = ?", convID).FirstOrCreate(&conv).Error
+func (d *convDao) FirstOrCreate(ctx context.Context, conv *model.Conversation) error {
+	err := d.db.WithContext(ctx).Where("conv_id = ?", conv.ConvID).FirstOrCreate(&conv).Error
 	if err != nil {
-		return nil, fmt.Errorf("failed to get conversation: %w", err)
+		return fmt.Errorf("failed to get conversation: %w", err)
 	}
-	return &conv, nil
+	return nil
 }
 
 // Page 分页获取会话
@@ -95,7 +94,7 @@ func (d *convDao) Page(ctx context.Context, userID uint, page, size int) ([]*mod
 	var convs []*model.Conversation
 	var total int64
 
-	db := d.db.WithContext(ctx).Model(&model.Conversation{}).Where("user_id = ?", userID)
+	db := d.db.WithContext(ctx).Model(&model.Conversation{}).Where("user_id = ?", userID).Order("updated_at DESC") // 按照更新时间降序排序
 
 	err := db.Count(&total).Error
 	if err != nil {
@@ -110,7 +109,7 @@ func (d *convDao) PageByAgent(ctx context.Context, userID uint, agentID string, 
 	var convs []*model.Conversation
 	var total int64
 
-	db := d.db.WithContext(ctx).Model(&model.Conversation{}).Where("user_id = ? AND agent_id = ?", userID, agentID)
+	db := d.db.WithContext(ctx).Model(&model.Conversation{}).Where("user_id = ? AND agent_id = ?", userID, agentID).Order("updated_at DESC") // 按照更新时间降序排序
 
 	err := db.Count(&total).Error
 	if err != nil {

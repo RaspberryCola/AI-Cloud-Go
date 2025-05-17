@@ -100,6 +100,6 @@ type CreateConvRequest struct {
 // ConvRequest 对话请求
 type ConvRequest struct {
 	AgentID string `json:"agent_id" binding:"required"`
-	ConvID  string `json:"conv_id" binding:"required"`
 	Message string `json:"message" binding:"required"`
+	ConvID  string `json:"conv_id"`
 }
