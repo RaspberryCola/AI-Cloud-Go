@@ -135,6 +135,11 @@ func (c *AgentController) UpdateAgent(ctx *gin.Context) {
 		agentSchema.Knowledge = req.Knowledge
 	}
 
+	// Update TopK if provided
+	if req.Knowledge.TopK != 0 {
+		agentSchema.Knowledge.TopK = req.Knowledge.TopK
+	}
+
 	// Convert updated schema to JSON
 	schemaBytes, err := json.Marshal(agentSchema)
 	if err != nil {
