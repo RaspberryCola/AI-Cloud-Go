@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	register(ProviderOllama, &ollamaEmbedder{})
+	Register(ProviderOllama, NewOllamaEmbeddingService)
 }
 
 type OllamaEmbeddingConfig struct {
@@ -30,7 +30,7 @@ type ollamaEmbedder struct {
 }
 
 // TODO：添加默认超时时间防止报错
-func (o *ollamaEmbedder) New(ctx context.Context, cfg *model.Model, opts ...EmbeddingOption) (EmbeddingService, error) {
+func NewOllamaEmbeddingService(ctx context.Context, cfg *model.Model, opts ...EmbeddingOption) (EmbeddingService, error) {
 	// 检查配置
 	if err := checkCfg(cfg); err != nil {
 		return nil, err

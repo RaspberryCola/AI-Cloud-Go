@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	register(ProviderOpenAI, &openaiEmbedder{})
+	Register(ProviderOpenAI, NewOpenAIEmbeddingService)
 }
 
 type OpenAIEmbeddingConfig struct {
@@ -26,7 +26,7 @@ type openaiEmbedder struct {
 	embedder *openai.Embedder
 }
 
-func (o *openaiEmbedder) New(ctx context.Context, cfg *model.Model, opts ...EmbeddingOption) (EmbeddingService, error) {
+func NewOpenAIEmbeddingService(ctx context.Context, cfg *model.Model, opts ...EmbeddingOption) (EmbeddingService, error) {
 	if err := checkOpenAICfg(cfg); err != nil {
 		return nil, err
 	}
