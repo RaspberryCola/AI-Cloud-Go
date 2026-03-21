@@ -75,14 +75,14 @@ func (s *conversationService) StreamAgentWithConversation(ctx context.Context, u
 	err := s.historySvc.CreateConversation(ctx, conv)
 	if err != nil {
 		// 可能是会话已存在，忽略错误
-		log.Printf("[StreamAgentWithConversation] 创建会话失败: %w", err)
+		log.Printf("[StreamAgentWithConversation] 创建会话失败: %v", err)
 		return nil, fmt.Errorf("获取会话失败: %w", err)
 	}
 
 	// 先获取历史消息
 	historyMsgs, err := s.historySvc.GetHistory(ctx, convID, 50)
 	if err != nil {
-		log.Printf("[StreamAgentWithConversation] 获取历史消息失败: %w", err)
+		log.Printf("[StreamAgentWithConversation] 获取历史消息失败: %v", err)
 		return nil, fmt.Errorf("获取历史消息失败: %w", err)
 	}
 
@@ -93,7 +93,7 @@ func (s *conversationService) StreamAgentWithConversation(ctx context.Context, u
 	}
 	err = s.historySvc.SaveMessage(ctx, userSchemaMsg, convID)
 	if err != nil {
-		log.Printf("[StreamAgentWithConversation] 保存用户消息失败: %w", err)
+		log.Printf("[StreamAgentWithConversation] 保存用户消息失败: %v", err)
 		return nil, fmt.Errorf("保存用户消息失败: %w", err)
 	}
 
@@ -106,7 +106,7 @@ func (s *conversationService) StreamAgentWithConversation(ctx context.Context, u
 	// 调用Agent处理
 	sr, err := s.agentSvc.StreamExecuteAgent(ctx, userID, agentID, userMsg)
 	if err != nil {
-		log.Printf("[StreamAgentWithConversation] 运行Agent失败: %w", err)
+		log.Printf("[StreamAgentWithConversation] 运行Agent失败: %v", err)
 		return nil, fmt.Errorf("运行Agent失败: %w", err)
 	}
 

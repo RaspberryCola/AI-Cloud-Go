@@ -1,5 +1,7 @@
 # AI-Cloud-Go 配置指南
 
+> 更新说明：当前项目除了支持 `config/config.yaml` 之外，也支持环境变量覆盖配置。统一开发/部署流程请优先参考根目录 [README](/Users/smkl/mydevelop/MyProjects/AI-Cloud/README.md) 和 [DEPLOYMENT.md](/Users/smkl/mydevelop/MyProjects/AI-Cloud/DEPLOYMENT.md)。
+
 ### 配置文件结构
 
 配置文件(`config/config.yaml`)结构如下：
@@ -68,6 +70,8 @@ llm:
 ```
 
 ## 配置使用
+
+如果环境变量与 `config.yaml` 同时存在，环境变量优先。
 
 在Go代码中，可以通过以下方式访问配置：
 

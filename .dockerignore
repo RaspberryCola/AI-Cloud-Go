@@ -1,0 +1,9 @@
+.git
+.gitignore
+.idea
+.qoder
+docs
+test
+tmp
+*.log
+.DS_Store

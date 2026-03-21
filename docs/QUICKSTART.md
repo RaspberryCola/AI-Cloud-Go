@@ -1,5 +1,7 @@
 # AI-Cloud-Go 快速启动指南
 
+> 更新说明：如果您是同时运行前后端，推荐改为从工作区根目录使用统一命令。请优先参考根目录 [README](/Users/smkl/mydevelop/MyProjects/AI-Cloud/README.md) 和 [DEPLOYMENT.md](/Users/smkl/mydevelop/MyProjects/AI-Cloud/DEPLOYMENT.md)。
+
 这份指南将帮助您快速设置并运行AI-Cloud-Go系统，包括各种支持的嵌入服务配置。
 
 ## 前置条件
@@ -286,4 +288,3 @@ curl -X POST http://localhost:11434/api/embed -d '{"model":"mxbai-embed-large", 
   1. 确保Milvus容器正在运行：`docker ps | grep milvus`
   2. 检查config.yaml中的milvus.address配置是否正确
   3. 如果使用自定义Milvus部署，确保端口映射正确
-

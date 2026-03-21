@@ -11,6 +11,7 @@ import (
 	"ai-cloud/internal/router"
 	"ai-cloud/internal/service"
 	"context"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,5 +58,9 @@ func main() {
 	// 配置路由
 	router.SetUpRouters(r, userController, fileController, kbController, modelController, agentController, conversationController)
 
-	r.Run(":8080")
+	port := config.GetConfig().Server.Port
+	if port == "" {
+		port = "8080"
+	}
+	r.Run(fmt.Sprintf(":%s", port))
 }

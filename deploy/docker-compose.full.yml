@@ -1,0 +1,190 @@
+services:
+  frontend:
+    build:
+      context: ../../frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${APP_PORT:-80}:80"
+    networks:
+      - ai-cloud-network
+
+  backend:
+    build:
+      context: ..
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      standalone:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-123456}
+      DB_NAME: ${DB_NAME:-ai_cloud}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      STORAGE_TYPE: ${STORAGE_TYPE:-minio}
+      STORAGE_LOCAL_BASE_DIR: ${STORAGE_LOCAL_BASE_DIR:-/app/storage_data}
+      STORAGE_MINIO_ENDPOINT: ${STORAGE_MINIO_ENDPOINT:-minio:9000}
+      STORAGE_MINIO_BUCKET: ${STORAGE_MINIO_BUCKET:-ai-cloud}
+      STORAGE_MINIO_ACCESS_KEY_ID: ${STORAGE_MINIO_ACCESS_KEY_ID:-minioadmin}
+      STORAGE_MINIO_ACCESS_KEY_SECRET: ${STORAGE_MINIO_ACCESS_KEY_SECRET:-minioadmin}
+      STORAGE_MINIO_USE_SSL: ${STORAGE_MINIO_USE_SSL:-false}
+      STORAGE_MINIO_REGION: ${STORAGE_MINIO_REGION:-}
+      MILVUS_ADDRESS: ${MILVUS_ADDRESS:-standalone:19530}
+      MILVUS_INDEX_TYPE: ${MILVUS_INDEX_TYPE:-IVF_FLAT}
+      MILVUS_METRIC_TYPE: ${MILVUS_METRIC_TYPE:-COSINE}
+      MILVUS_NLIST: ${MILVUS_NLIST:-128}
+      MILVUS_NPROBE: ${MILVUS_NPROBE:-16}
+      MILVUS_ID_MAX_LENGTH: ${MILVUS_ID_MAX_LENGTH:-64}
+      MILVUS_CONTENT_MAX_LENGTH: ${MILVUS_CONTENT_MAX_LENGTH:-65535}
+      MILVUS_DOC_ID_MAX_LENGTH: ${MILVUS_DOC_ID_MAX_LENGTH:-64}
+      MILVUS_DOC_NAME_MAX_LENGTH: ${MILVUS_DOC_NAME_MAX_LENGTH:-256}
+      MILVUS_KB_ID_MAX_LENGTH: ${MILVUS_KB_ID_MAX_LENGTH:-64}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1500}
+      RAG_OVERLAP_SIZE: ${RAG_OVERLAP_SIZE:-500}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost,http://localhost:80}
+      CORS_ALLOW_METHODS: ${CORS_ALLOW_METHODS:-GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      CORS_ALLOW_HEADERS: ${CORS_ALLOW_HEADERS:-Origin,Content-Type,Accept,Authorization}
+      CORS_EXPOSE_HEADERS: ${CORS_EXPOSE_HEADERS:-Content-Length}
+      CORS_ALLOW_CREDENTIALS: ${CORS_ALLOW_CREDENTIALS:-true}
+      CORS_MAX_AGE: ${CORS_MAX_AGE:-12h}
+      LLM_API_KEY: ${LLM_API_KEY:-replace-with-your-key}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.deepseek.com/v1}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-10240}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - backend_storage:/app/storage_data
+    networks:
+      - ai-cloud-network
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_cloud}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ai-cloud-network
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - ai-cloud-network
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb --ignore-existing myminio/${STORAGE_MINIO_BUCKET:-ai-cloud};
+      exit 0;
+      "
+    networks:
+      - ai-cloud-network
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    restart: unless-stopped
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - etcd_data:/etcd
+    networks:
+      - ai-cloud-network
+
+  minio-for-milvus:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: minio server /minio_data
+    volumes:
+      - minio_data_for_milvus:/minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - ai-cloud-network
+
+  standalone:
+    image: milvusdb/milvus:v2.4.1
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio-for-milvus:9000
+    depends_on:
+      - etcd
+      - minio-for-milvus
+    volumes:
+      - milvus_data:/var/lib/milvus
+    networks:
+      - ai-cloud-network
+
+  attu:
+    image: zilliz/attu:latest
+    restart: unless-stopped
+    profiles: ["tools"]
+    environment:
+      MILVUS_URL: standalone:19530
+    depends_on:
+      - standalone
+    ports:
+      - "${ATTU_PORT:-8000}:3000"
+    networks:
+      - ai-cloud-network
+
+volumes:
+  backend_storage:
+  mysql_data:
+  minio_data:
+  etcd_data:
+  minio_data_for_milvus:
+  milvus_data:
+
+networks:
+  ai-cloud-network:
+    driver: bridge
